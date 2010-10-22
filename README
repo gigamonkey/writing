@@ -1,0 +1,9 @@
+Some elisp I used during my successful 2009 NaNoWriMo effort.
+
+Counts words using `wc' which seems to be what the official NaNoWriMo
+word counter uses and then computes how many words are needed in the
+remaining days and a bunch of other stats over which I can obsess.
+
+Also includes my smart-quote-mode which automatically converts
+straight quotes to curly quotes and '--' to an emdash.
+
