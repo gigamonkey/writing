@@ -52,12 +52,12 @@
 (defparameter *max-days* 30) 
 
 ;; First day
-(defparameter *start-date* (encode-time 0 0 0 1 11 2009)) 
+(defparameter *start-date* (encode-time 0 0 0 1 11 2011))
 
 ;; File containing intermediate targets. Maintained by hand.
 (defparameter *targets-file* "targets.sexp")
 
-(defparameter *words-per-page* 350)
+(defparameter *words-per-page* 250)
 
 (defun nanowrimo-day ()
   (1+ (- (time-to-days (current-time)) (time-to-days *start-date*))))
@@ -105,7 +105,8 @@
       (add-targets (nanowrimo-competitive-targets))
       (add-targets (nanowrimo-round-today-targets current-count 1000 10000))
       (add-targets (nanowrimo-todays-pace-target (nanowrimo-day-n-total (1- (nanowrimo-day))) (nanowrimo-day)))
-      (add-targets (nanowrimo-maintain-average-target current-count))
+      (if (> (nanowrimo-day) 1)
+          (add-targets (nanowrimo-maintain-average-target current-count)))
       (add-targets (nanowrimo-increase-average-targets 50 2000))
       ;(add-targets (nanowrimo-round-numbers-to-go *nanowrimo-goal* (- *nanowrimo-goal* 500) current-count 500))
 )
@@ -113,7 +114,9 @@
     (sort targets #'(lambda (x y) (< (car x) (car y))))))
 
 (defun nanowrimo-day-n-total (n)
-  (or (cdr (assoc n (nanowrimo-read-file-as-sexp (nanowrimo-word-count-data-file)))) (error "Total words for day %d not recorded." n)))
+  (if (zerop n)
+      0
+    (or (cdr (assoc n (nanowrimo-read-file-as-sexp (nanowrimo-word-count-data-file)))) (error "Total words for day %d not recorded." n))))
 
 (defun nanowrimo-words-on-day (n)
   (- (nanowrimo-day-n-total n) (nanowrimo-day-n-total (1- n))))
@@ -238,8 +241,6 @@
 	 (days-left (- days day))
 	 (words-today (- count (nanowrimo-day-n-total full-days-passed)))
 	 (average-so-far (/ count (float day)))
-	 (average-as-of-yesterday (/ (- count words-today) (1- day)))
-	 (to-hit-average (- average-as-of-yesterday words-today))
 	 (spare-days (- days-left (ceiling (- goal count) average-so-far)))
 	 (projected-word-count (round (* average-so-far *max-days*)))
 	 (words-by-midnight (ceiling (* (/ goal (float days)) day)))
