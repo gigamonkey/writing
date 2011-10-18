@@ -79,6 +79,7 @@
     ("–" "Endash" "--")
     ("-" "Hyphen" "-")
     ("—" "Emdash" "--")
+    ("−" "Minus sign" "-")
     ("…" "Ellipses" "...")))
 
 (defvar smart-quote-rotations
@@ -92,7 +93,8 @@
     ("′" . "‘")
     ("—" . "–")
     ("–" . "-")
-    ("-" . "—")))
+    ("-" . "−")
+    ("−" . "—")))
 
 (defun smart-quote-insert (what)
   (let* ((entry (assoc what smart-quote-names))
