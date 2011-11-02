@@ -269,7 +269,8 @@
       (message message)))))
 
 (defun nanowrimo-win-date (days-until-win)
-  (format-time-string "%d %B %Y" (nanowrimo-win-time days-until-win)))
+  (let ((s (format-time-string "%d %B %Y" (nanowrimo-win-time days-until-win))))
+    (if (string= (substring s 0 1) "0") (substring s 1) s)))
 
 (defun nanowrimo-win-time (days-until-win)
   (time-add (current-time) (seconds-to-time (* 60 60 24 days-until-win))))
@@ -327,7 +328,7 @@
 (define-derived-mode nanowrimo-mode
   outline-mode "NaNoWriMo" "Mode for working on NaNoWriMo novel."
   :syntax-table nanowrimo-mode-syntax-table
-  (longlines-mode t)
+  ;(longlines-mode t)
   (smart-quote-mode t)
   (set (make-local-variable 'outline-regexp) "*+ ")
   (set (make-local-variable 'outline-level) 
