@@ -37,6 +37,8 @@
 ;;; SUCH DAMAGE.
 ;;;
 
+(require 'cl)
+
 ;; Do two ASCII dashes get translated to an emdash (with no spaces) or,
 ;; as some typographers prefer, an endash with surrounding spaces.
 (defvar *smart-quote-use-mdash* t)
@@ -131,7 +133,7 @@
 (defun smart-quote-insert-ellipsis ()
   (interactive)
   (let ((char1 (char-before (1- (point))))
-	(char2 (char-before)))
+        (char2 (char-before)))
     (cond
      ((and char1 char2 (char-equal char1 ?.) (char-equal char2 ?.))
       (delete-backward-char 2)
