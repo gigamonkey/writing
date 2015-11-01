@@ -277,7 +277,7 @@
       (say "%s words per day after today." (nanowrimo-commify words-per-day))
       (when next-target
         (destructuring-bind (target . description) next-target
-          (say "%s to %s." (nanowrimo-commify (- target count)) description)))
+          (say "%s %s." (nanowrimo-commify (- target count)) description)))
       (say "Current average %s;" (nanowrimo-commify average-so-far))
       (when (> goal count)
         (say " Projected win: %s." (nanowrimo-win-date days-until-win)))
