@@ -280,7 +280,7 @@
           (say "%s %s." (nanowrimo-commify (- target count)) description)))
       (say "Current average %s;" (nanowrimo-commify average-so-far))
       (when (> goal count)
-        (say " Projected win: %s." (nanowrimo-win-date days-until-win)))
+        (say "Projected win: %s." (nanowrimo-win-date days-until-win)))
       (message message)))))
 
 (defun nanowrimo-win-date (days-until-win)
