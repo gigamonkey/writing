@@ -20,7 +20,7 @@
 
 (defun pbs:add-latex-tag (point mark tag)
   (interactive "r\nsTag: ")
-  (save-excursion 
+  (save-excursion
     (goto-char mark)
     (insert "}")
     (goto-char point)
@@ -35,7 +35,7 @@
 
 (defun pbs:occur-headers (n)
   (interactive "p")
-  (occur 
+  (occur
    (cond
      ((= n 1) "^\\\\h1")
      ((= n 4) "^\\\\h"))))
@@ -66,9 +66,8 @@
     (goto-char start)
     (insert (format "\\%s{" tag))))
 
-
 (defmacro pbs:make-formatter (tag)
-  `#'(lambda (prefix) 
+  `#'(lambda (prefix)
       (interactive "p")
       (pbs:add-markup prefix ,tag)))
 
@@ -122,7 +121,7 @@
 
 ;;; BUSTED by changes in slime.
 (defun pbs:slime-eval-print-last-expression (string)
-  (slime-eval-async 
+  (slime-eval-async
    `(swank:interactive-eval (format "%s" ,string))
    (slime-current-package)
    (lexical-let ((buffer (current-buffer))
@@ -147,14 +146,14 @@
            (let ((heading (buffer-substring-no-properties (match-beginning 1) (match-end 1))))
              (fi:eval-in-lisp (format "(book::title2filename \"%s\")" heading)))))
         (name
-         (save-excursion 
+         (save-excursion
            (ignore-errors (outline-up-heading 1))
            (re-search-forward (concat outline-regexp "\\(.*\\)") (point-max) t)
            (let ((heading (buffer-substring-no-properties (match-beginning 1) (match-end 1))))
              (fi:eval-in-lisp (format "(book::title2filename \"%s\")" heading))))))
     (fi:eval-in-lisp (format "(book::regenerate-chapter \"%s\")" filename))
     (browse-url
-     (format 
+     (format
       (cond
        ((= arg 1) "file:///home/peter/www.gigamonkeys.com/book/%s.html#%s")
        ((= arg 4) "file:///home/peter/www.gigamonkeys.com/book/%s-headers.html#%s")
@@ -167,15 +166,15 @@
   (interactive)
   (let ((previous (pbs:previous-symbol)))
     (when (and (plusp (length previous)) (not (or (pbs:in-outline-header) (pbs:in-code-block))))
-      (let ((markup 
+      (let ((markup
              (cond
               ((gethash previous *common-lisp-symbols*) "cl")
-              ((or (pbs:keywordp previous) 
+              ((or (pbs:keywordp previous)
                    (pbs:special-var-p previous)
                    (pbs:format-directive-p previous)) "code")
               ((pbs:code-name-p previous) "code"))))
         (when markup
-          (pbs:markup-region 
+          (pbs:markup-region
            markup
            (- (point) (length previous)) (point)))))))
 
@@ -285,7 +284,7 @@
      (and (plusp (length previous)) (or (pbs:keywordp previous) (pbs:special-var-p previous)) previous)
      (pbs:previous-format-directive)
      (and (plusp (length previous)) (pbs:code-name-p previous) previous))))
-    
+
 (defvar *normal-syntax-table* (make-syntax-table))
 
 (defun pbs:backward-word (&optional arg)
@@ -348,7 +347,7 @@
 (define-derived-mode pbs:book-mode
   outline-mode "Book" "Mode for editining my book."
   (pbs:turn-on-auto-tagging))
-    
+
 
 (define-key pbs:book-mode-map [(control ?c) right] 'pbs:demote-outline-levels)
 (define-key pbs:book-mode-map [(control ?c) left] 'pbs:promote-outline-levels)
@@ -408,7 +407,7 @@
                (message "%d words in %s." count label)
                count))))
     (save-excursion
-      (cond 
+      (cond
         ((= n 4)
          (save-excursion
            (outline-mark-subtree)
@@ -425,7 +424,7 @@
 
 
 
-  
+
 (defun pbs:save-word-count (n)
   (interactive "p")
   (save-excursion
@@ -475,7 +474,7 @@
 (defun pbs:demote-outline-levels ()
   (interactive)
   (pbs:outline-change-levels #'(lambda () (insert "*"))))
-      
+
 (defun pbs:add-outline-keybindings ()
   (interactive)
   (let ((map (make-sparse-keymap)))
@@ -486,7 +485,7 @@
 
     (substitute-key-definition
      'forward-word 'pbs:forward-word map (current-global-map))
-    
+
     (substitute-key-definition
      'backward-word 'pbs:backward-word map (current-global-map))
 
@@ -517,7 +516,7 @@
   (make-local-variable 'pbs:book-buffer)
   (unless (boundp 'pbs:book-buffer)
     (setf pbs:book-buffer (read-buffer "Book buffer: ")))
-  (save-excursion 
+  (save-excursion
     (let ((text (buffer-substring-no-properties start end)))
       (switch-to-buffer pbs:book-buffer)
       (newline 2)
@@ -529,10 +528,10 @@
       (newline 1)
       (delete-blank-lines))))
 
-      
+
 (defun pbs:sexp-on-one-line ()
   (interactive)
-  (save-excursion 
+  (save-excursion
     (pbs:start-of-sexp)
     (let ((start (point)))
       (forward-sexp)
@@ -548,7 +547,7 @@
   (interactive)
   (unless (looking-at "\\s *\(")
     (backward-up-list 1)))
-    
+
 
 (defun pbs:proof-read ()
   (interactive)
@@ -559,7 +558,7 @@
 (defun pbs:proof-read ()
   (interactive)
   (with-syntax-table *normal-syntax-table*
-    (search-forward-regexp (if *just-pronouns* 
+    (search-forward-regexp (if *just-pronouns*
                              "\\b\\(we\\|us\\|our\\(s\\(el\\(f\\|ves\\)\\)?\\)?\\)\\b"
                              "\\b\\(we\\|us\\|our\\(s\\(el\\(f\\|ves\\)\\)?\\)?\\|only\\|tk\\|above\\|below\\|last\\|which\\|that\\|\\(there[[:space:]\n]+\\(is\\|are\\)\\)\\)\\b"))))
 
@@ -590,7 +589,7 @@
               (delete-overlay overlay)
               (setq overlay nil))))
       (if overlay (delete-overlay overlay)))))
-  
+
 
 (defun pbs:fix-quotes ()
   (interactive)
@@ -624,14 +623,14 @@
     ((string= "is" second) (concat first "'s"))
     ((string= "will" second) (concat first "'ll"))
     ((string= "would" second) (concat first "'d"))
-    ((string= "not" second) 
+    ((string= "not" second)
      (cond
        ((string= "can" first) "can't")
        ((string= "will" first) "won't")
        (t (concat first "n't"))))))
-    
 
-(defun mom-highlight-and-center (overlay)              
+
+(defun mom-highlight-and-center (overlay)
   (overlay-put overlay 'face 'highlight)
   (recenter 4))
 
