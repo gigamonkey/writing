@@ -1,6 +1,6 @@
 ;;; markup.el -- Major mode for editing Markup based text.
 ;;;
-;;; Copyright (c) 2010, Peter Seibel
+;;; Copyright (c) 2010-2017, Peter Seibel
 ;;; All rights reserved.
 ;;;
 ;;; Redistribution and use in source and binary forms, with or without
@@ -36,25 +36,29 @@
 ;;; SUCH DAMAGE.
 ;;;
 
+(defun markup-tag (prefix tag)
+  (interactive "p\nsTag: ")
+  (let (start end)
+    (if (or (= prefix 4) mark-active)
+        (setq start (min (point) (mark))
+              end (max (point) (mark)))
+        (setq start (markup-find-previous-space)
+              end (point-marker)))
+    (goto-char end)
+    (insert "}")
+    (save-excursion
+      (goto-char start)
+      (insert (format "\\%s{" tag)))))
 
-;;;; Some day I should flesh this out to be a bit fancier. First thing
-;;;; to do is to move the keybindings in key.el for adding tags to
-;;;; here rather than having them be global and the relavant code from
-;;;; writing.el to here.
+(defmacro markup-formatter (tag)
+  `#'(lambda (prefix)
+      (interactive "p")
+      (markup-tag prefix ,tag)))
 
-(define-derived-mode markup-mode
-  outline-mode "Markup" "Mode for editing Markup based text."
-  ;(longlines-mode t)
-  (smart-quote-mode t)
-  (make-local-variable '*smart-quote-disabled-tests*)
-  (push 'markup-in-verbatim *smart-quote-disabled-tests*)
-  (push 'markup-in-code *smart-quote-disabled-tests*)
-  (set-buffer-file-coding-system 'utf-8 t t))
-
-;(defun markup-in-verbatim ()
-;  (save-excursion
-;    (beginning-of-line)
-;    (looking-at "   ")))
+(defun markup-find-previous-space ()
+  (save-excursion
+    (backward-sexp 1)
+    (point)))
 
 (defun markup-in-verbatim ()
   (or
@@ -90,5 +94,21 @@
     (goto-char (point-min))
     (replace-regexp nullstring "\n\n")))
 
+(define-derived-mode markup-mode
+  outline-mode "Markup" "Mode for editing Markup based text."
+  (visual-line-mode t)
+  (visual-fill-column-mode t)
+  (smart-quote-mode t)
+  (make-local-variable '*smart-quote-disabled-tests*)
+  (push 'markup-in-verbatim *smart-quote-disabled-tests*)
+  (push 'markup-in-code *smart-quote-disabled-tests*)
+  (set-buffer-file-coding-system 'utf-8 t t))
+
+(define-key markup-mode-map "\C-cf" nil)
+(define-key markup-mode-map "\C-cfi" (markup-formatter "i"))
+(define-key markup-mode-map "\C-cfb" (markup-formatter "b"))
+(define-key markup-mode-map "\C-cfn" (markup-formatter "note"))
+(define-key markup-mode-map "\C-cfc" (markup-formatter "code"))
+(define-key markup-mode-map "\C-cfm" (markup-formatter "math"))
 
 (provide 'markup)
