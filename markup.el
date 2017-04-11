@@ -96,8 +96,7 @@
 
 (define-derived-mode markup-mode
   outline-mode "Markup" "Mode for editing Markup based text."
-  (visual-line-mode t)
-  (visual-fill-column-mode t)
+  (auto-fill-mode t)
   (smart-quote-mode t)
   (make-local-variable '*smart-quote-disabled-tests*)
   (push 'markup-in-verbatim *smart-quote-disabled-tests*)
@@ -110,5 +109,6 @@
 (define-key markup-mode-map "\C-cfn" (markup-formatter "note"))
 (define-key markup-mode-map "\C-cfc" (markup-formatter "code"))
 (define-key markup-mode-map "\C-cfm" (markup-formatter "math"))
+
 
 (provide 'markup)
