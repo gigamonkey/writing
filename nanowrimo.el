@@ -234,7 +234,7 @@
                (let ((to-finish-in-pace (ceiling (/ to-go (float (1+ i))))))
                  (cons
                   (cons (+ start-of-day to-finish-in-pace)
-                        (format "hit 11/%d steady finish pace" (+ today i)))
+                        (format "hit new steady pace for 11/%d finish" (+ today i)))
                   (helper (1+ i))))))))
       (helper 1))))
 
@@ -270,7 +270,7 @@
       (cl-flet ((say (x &rest args)
               (setf message (concat message " " (apply #'format x args)))))
       (when (> goal count)
-        (say "%s to go;" (nanowrimo-commify words-to-go)))
+        (say "%s to go." (nanowrimo-commify words-to-go)))
       (say "%s done today." (nanowrimo-commify words-today))
       (when (> words-left-today 0)
         (say "%s left for today." (nanowrimo-commify words-left-today)))
@@ -278,7 +278,7 @@
       (when next-target
         (destructuring-bind (target . description) next-target
           (say "%s %s." (nanowrimo-commify (- target count)) description)))
-      (say "Current average %s;" (nanowrimo-commify average-so-far))
+      (say "Current average %s." (nanowrimo-commify average-so-far))
       (when (> goal count)
         (say "Projected win: %s." (nanowrimo-win-date days-until-win)))
       (message message)))))
