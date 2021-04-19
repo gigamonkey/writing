@@ -1,7 +1,6 @@
-;;; nanowrimo.el -- elisp for tracking wordcount while working on
-;;; NaNoWriMo novel.
+;;; word-counting.el -- elisp for tracking wordcounts.
 ;;;
-;;; Copyright (c) 2009, Peter Seibel
+;;; Copyright (c) 2009-2021, Peter Seibel
 ;;; All rights reserved.
 ;;;
 ;;; Redistribution and use in source and binary forms, with or without
@@ -37,7 +36,7 @@
 ;;; SUCH DAMAGE.
 ;;;
 
-;;; To use this code add a modeline like "-*- mode: nanowrimo; -*-" to
+;;; To use this code add a modeline like "-*- mode: wc; -*-" to
 ;;; the top of a file.
 
 (defmacro defparameter (name value &optional docstring)
@@ -46,7 +45,7 @@
      (setq-default ,name ,value)))
 
 ;; Number of words needed to win!
-(defparameter *nanowrimo-goal* 50000)
+(defparameter *wc-goal* 50000)
 
 ;; Total number of days available
 (defparameter *max-days* 30)
@@ -59,90 +58,90 @@
 
 (defparameter *words-per-page* 250)
 
-(defun nanowrimo-day ()
+(defun wc-day ()
   (1+ (- (time-to-days (current-time)) (time-to-days *start-date*))))
 
-(defun nanowrimo-read-file-as-sexp (file)
+(defun wc-read-file-as-sexp (file)
   (with-current-buffer (find-file-noselect file)
     (if (zerop (buffer-size))
         nil
       (read (buffer-string)))))
 
-(defun nanowrimo-save-sexp-to-file (file sexp)
+(defun wc-save-sexp-to-file (file sexp)
   (with-current-buffer (find-file-noselect file)
     (erase-buffer)
     (print sexp (current-buffer))
     (save-buffer)))
 
-(defun nanowrimo-word-count-data-file ()
+(defun wc-word-count-data-file ()
   (format ".%s-word-counts.sexp" (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
 
-(defun nanowrimo-word-count-full-log ()
+(defun wc-word-count-full-log ()
   (format ".%s-word-counts-log.sexp" (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
 
-(defun nanowrimo-save-word-count (words file)
-  (let ((counts (nanowrimo-read-file-as-sexp file))
-        (today (nanowrimo-day)))
+(defun wc-save-word-count (words file)
+  (let ((counts (wc-read-file-as-sexp file))
+        (today (wc-day)))
     (if (assoc today counts)
         (setf (cdr (assoc today counts)) words)
       (setf counts (cons (cons today words) counts)))
-    (nanowrimo-save-sexp-to-file file (sort counts #'(lambda (x y) (< (car x) (car y)))))))
+    (wc-save-sexp-to-file file (sort counts #'(lambda (x y) (< (car x) (car y)))))))
 
-(defun nanowrimo-log-word-count (words)
-  (with-current-buffer (find-file-noselect (nanowrimo-word-count-full-log))
+(defun wc-log-word-count (words)
+  (with-current-buffer (find-file-noselect (wc-word-count-full-log))
     (goto-char (point-max))
     (insert (format "%d\t%d" (round (* (float-time) 1000)) words))
     (save-buffer)))
 
-(defun nanowrimo-words-today (count)
-  (- count (nanowrimo-day-n-total (1- (nanowrimo-day)))))
+(defun wc-words-today (count)
+  (- count (wc-day-n-total (1- (wc-day)))))
 
-(defun nanowrimo-targets (current-count)
-  (let ((targets (list (cons *nanowrimo-goal* "Win!"))))
+(defun wc-targets (current-count)
+  (let ((targets (list (cons *wc-goal* "Win!"))))
     (cl-flet ((add-targets (new-targets)
                            (dolist (target new-targets)
                              (destructuring-bind (target-count . description) target
                                (cond
                                 ((assoc target-count targets)
                                  (let ((item (assoc target-count targets)))
-                                   (unless (= target-count *nanowrimo-goal*)
+                                   (unless (= target-count *wc-goal*)
                                   (setf (cdr item) (format "%s, %s" (cdr item) description)))))
                                 (t (push target targets)))))))
-      (add-targets (nanowrimo-average-targets *nanowrimo-goal* *max-days* (nanowrimo-day)))
-      (add-targets (nanowrimo-daily-targets *nanowrimo-goal* (nanowrimo-day)))
-      (add-targets (nanowrimo-round-targets (* 1000 (ceiling (+ current-count (* 5 1000)) 1000)) 1000))
-      (add-targets (nanowrimo-competitive-targets))
-      (add-targets (nanowrimo-round-today-targets current-count 1000 10000))
-      (add-targets (nanowrimo-todays-pace-target (nanowrimo-day-n-total (1- (nanowrimo-day))) (nanowrimo-day)))
-      (if (> (nanowrimo-day) 1)
-          (add-targets (nanowrimo-maintain-average-target current-count)))
-      (add-targets (nanowrimo-increase-average-targets 50 2000))
-      ;;(add-targets (nanowrimo-round-numbers-to-go *nanowrimo-goal* (- *nanowrimo-goal* 500) current-count 500))
+      (add-targets (wc-average-targets *wc-goal* *max-days* (wc-day)))
+      (add-targets (wc-daily-targets *wc-goal* (wc-day)))
+      (add-targets (wc-round-targets (* 1000 (ceiling (+ current-count (* 5 1000)) 1000)) 1000))
+      (add-targets (wc-competitive-targets))
+      (add-targets (wc-round-today-targets current-count 1000 10000))
+      (add-targets (wc-todays-pace-target (wc-day-n-total (1- (wc-day))) (wc-day)))
+      (if (> (wc-day) 1)
+          (add-targets (wc-maintain-average-target current-count)))
+      (add-targets (wc-increase-average-targets 50 2000))
+      ;;(add-targets (wc-round-numbers-to-go *wc-goal* (- *wc-goal* 500) current-count 500))
       )
 
     (sort targets #'(lambda (x y) (< (car x) (car y))))))
 
-(defun nanowrimo-day-n-total (n)
-  (let* ((in-file (nanowrimo-read-file-as-sexp (nanowrimo-word-count-data-file)))
+(defun wc-day-n-total (n)
+  (let* ((in-file (wc-read-file-as-sexp (wc-word-count-data-file)))
          (latest (assoc-if #'(lambda (x) (<= x n)) (reverse in-file))))
     (if latest (cdr latest) 0)))
 
-(defun nanowrimo-words-on-day (n)
-  (- (nanowrimo-day-n-total n) (nanowrimo-day-n-total (1- n))))
+(defun wc-words-on-day (n)
+  (- (wc-day-n-total n) (wc-day-n-total (1- n))))
 
-(defun nanowrimo-full-count ()
+(defun wc-full-count ()
   (save-excursion
     (goto-char (point-min))
     (forward-line 1) ;; To account for the mode line.
-    (nanowrimo-raw-count (point) (point-max))))
+    (wc-raw-count (point) (point-max))))
 
-(defun nanowrimo-count-region ()
+(defun wc-count-region ()
   (interactive)
-  (let ((count (nanowrimo-raw-count (region-beginning) (region-end))))
+  (let ((count (wc-raw-count (region-beginning) (region-end))))
     (message "%d words; (~%d pages)" count (ceiling count *words-per-page*))))
 
-(defun nanowrimo-raw-count (start end)
-  "Count words using 'wc -w' since that's what the official NaNoWriMo count seems to use. This assumes you're on a system where 'wc' is available."
+(defun wc-raw-count (start end)
+  "Count words using 'wc -w' since that's what the official Wc count seems to use. This assumes you're on a system where 'wc' is available."
   (save-excursion
     (let ((buffer-modified-p (buffer-modified-p))
           (p (point)))
@@ -152,50 +151,50 @@
         (set-buffer-modified-p buffer-modified-p)
         count))))
 
-(defun nanowrimo-word-count ()
+(defun wc-word-count ()
   "Count words in either the region (if active) or the whole file minus the modeline."
   (interactive)
-  (if (not (< 0 (nanowrimo-day) (1+ *max-days*)))
+  (if (not (< 0 (wc-day) (1+ *max-days*)))
       (message "Hey! No fair writing outside November.")
     (if mark-active
-        (nanowrimo-count-region)
-      (let ((count (nanowrimo-full-count)))
+        (wc-count-region)
+      (let ((count (wc-full-count)))
         (if (zerop count)
             (message "No words yet. Better get cracking.")
-          (nanowrimo-report-word-count count *nanowrimo-goal* *max-days*))))))
+          (wc-report-word-count count *wc-goal* *max-days*))))))
 
-(defun nanowrimo-competitive-targets ()
+(defun wc-competitive-targets ()
   (let ((place 0))
     (mapcar #'(lambda (x) (cons (car x) (format "%s (#%d)" (cdr x) (incf place))))
-            (nanowrimo-read-file-as-sexp *targets-file*))))
+            (wc-read-file-as-sexp *targets-file*))))
 
-(defun nanowrimo-average-target (goal target-day today)
+(defun wc-average-target (goal target-day today)
   (ceiling (* today (/ goal (float target-day)))))
 
-(defun nanowrimo-average-targets (goal start-target-day today)
+(defun wc-average-targets (goal start-target-day today)
   (cond
    ((<= start-target-day today) nil)
-   (t (cons (cons (nanowrimo-average-target goal start-target-day today) (format "get on pace to finish by 11/%d" start-target-day))
-            (nanowrimo-average-targets goal (1- start-target-day) today)))))
+   (t (cons (cons (wc-average-target goal start-target-day today) (format "get on pace to finish by 11/%d" start-target-day))
+            (wc-average-targets goal (1- start-target-day) today)))))
 
-(defun nanowrimo-round-targets (goal step)
+(defun wc-round-targets (goal step)
   (cond
    ((not (plusp goal)) nil)
-   (t (cons (cons goal (format "hit even %s" (nanowrimo-commify goal))) (nanowrimo-round-targets (- goal step) step)))))
+   (t (cons (cons goal (format "hit even %s" (wc-commify goal))) (wc-round-targets (- goal step) step)))))
 
-(defun nanowrimo-daily-targets (goal day)
+(defun wc-daily-targets (goal day)
   (cond
    ((= day *max-days*) nil)
    (t
     (let ((per-day (/ goal (float *max-days*))))
       (cons
        (cons (ceiling (/ (* goal day) (float *max-days*)))
-             (format "hit 11/%s %s words-per-day goal" day (nanowrimo-commify per-day)))
-       (nanowrimo-daily-targets goal (1+ day)))))))
+             (format "hit 11/%s %s words-per-day goal" day (wc-commify per-day)))
+       (wc-daily-targets goal (1+ day)))))))
 
-(defun nanowrimo-maintain-average-target (count)
-  (let* ((day (nanowrimo-day))
-         (yesterday-total (nanowrimo-day-n-total (1- day)))
+(defun wc-maintain-average-target (count)
+  (let* ((day (wc-day))
+         (yesterday-total (wc-day-n-total (1- day)))
          (words-today (- count yesterday-total))
          (average-as-of-yesterday (/ yesterday-total (1- day))))
     (if (< words-today average-as-of-yesterday)
@@ -203,30 +202,30 @@
                     "maintain average"))
       nil)))
 
-(defun nanowrimo-increase-average-targets (step average)
-  (let ((day (nanowrimo-day)))
+(defun wc-increase-average-targets (step average)
+  (let ((day (wc-day)))
     (cond
      ((not (plusp average)) nil)
      (t
       (cons
-         (cons (* average day) (format "to increase average to %s" (nanowrimo-commify average)))
-         (nanowrimo-increase-average-targets step (- average step)))))))
+         (cons (* average day) (format "to increase average to %s" (wc-commify average)))
+         (wc-increase-average-targets step (- average step)))))))
 
 
-(defun nanowrimo-round-today-targets (current-count step max-per-day)
-  (let* ((words-today (nanowrimo-words-today current-count))
+(defun wc-round-today-targets (current-count step max-per-day)
+  (let* ((words-today (wc-words-today current-count))
          (first-round (* step (ceiling words-today step))))
     (cl-labels ((helper (i)
                    (let* ((for-today (+ (- first-round words-today) (* i step)))
                           (target (+ current-count for-today)))
                      (cond
                       ((> for-today max-per-day) nil)
-                      (t  (cons (cons target (format "hit even %s today" (nanowrimo-commify (+ words-today for-today))))
+                      (t  (cons (cons target (format "hit even %s today" (wc-commify (+ words-today for-today))))
                                 (helper (1+ i))))))))
       (helper 0))))
 
-(defun nanowrimo-todays-pace-target (start-of-day today)
-  (let ((to-go (- *nanowrimo-goal* start-of-day)))
+(defun wc-todays-pace-target (start-of-day today)
+  (let ((to-go (- *wc-goal* start-of-day)))
     (cl-labels ((helper (i)
              (cond
               ((> i (- *max-days* today)) nil)
@@ -238,74 +237,74 @@
                   (helper (1+ i))))))))
       (helper 1))))
 
-(defun nanowrimo-round-numbers-to-go (goal x current-count step)
+(defun wc-round-numbers-to-go (goal x current-count step)
   (cond
    ((<= x current-count) nil)
    (t (cons
-       (cons x (format "even %s to go" (nanowrimo-commify (- goal x))))
-       (nanowrimo-round-numbers-to-go goal (- x step) current-count step)))))
+       (cons x (format "even %s to go" (wc-commify (- goal x))))
+       (wc-round-numbers-to-go goal (- x step) current-count step)))))
 
 
 
 
-(defun nanowrimo-report-word-count (count goal days)
+(defun wc-report-word-count (count goal days)
   "Given count, goal, and the number of days in which we want to finish, compute a bunch of statistics and report them. If today's word count is over the average needed to finish in `days' will decrease the number of days and try again."
-  (let* ((day (nanowrimo-day))
+  (let* ((day (wc-day))
          (words-to-go (- goal count))
-         (full-days-passed (1- (nanowrimo-day)))
+         (full-days-passed (1- (wc-day)))
          (days-left (- days day))
          (words-per-day (ceiling words-to-go days-left))
-         (words-today (- count (nanowrimo-day-n-total full-days-passed)))
+         (words-today (- count (wc-day-n-total full-days-passed)))
          (average-so-far (/ count (float day)))
          (days-until-win (ceiling words-to-go average-so-far))
          (spare-days (- days-left days-until-win))
          (projected-word-count (round (* average-so-far *max-days*)))
          (words-by-midnight (ceiling (* (/ goal (float days)) day)))
-         (next-target (find-if (lambda (x) (> (car x) count)) (nanowrimo-targets count)))
+         (next-target (find-if (lambda (x) (> (car x) count)) (wc-targets count)))
          (words-left-today (- words-by-midnight count))
          (pages (ceiling count *words-per-page*)))
-    (nanowrimo-save-word-count count (nanowrimo-word-count-data-file))
-    (nanowrimo-log-word-count count)
-    (let ((message (format "%s total (~%s pages)" (nanowrimo-commify count) (nanowrimo-commify pages))))
+    (wc-save-word-count count (wc-word-count-data-file))
+    (wc-log-word-count count)
+    (let ((message (format "%s total (~%s pages)" (wc-commify count) (wc-commify pages))))
       (cl-flet ((say (x &rest args)
               (setf message (concat message " " (apply #'format x args)))))
       (when (> goal count)
-        (say "%s to go." (nanowrimo-commify words-to-go)))
-      (say "%s done today." (nanowrimo-commify words-today))
+        (say "%s to go." (wc-commify words-to-go)))
+      (say "%s done today." (wc-commify words-today))
       (when (> words-left-today 0)
-        (say "%s left for today." (nanowrimo-commify words-left-today)))
-      (say "%s words per day after today." (nanowrimo-commify words-per-day))
+        (say "%s left for today." (wc-commify words-left-today)))
+      (say "%s words per day after today." (wc-commify words-per-day))
       (when next-target
         (destructuring-bind (target . description) next-target
-          (say "%s %s." (nanowrimo-commify (- target count)) description)))
-      (say "Current average %s." (nanowrimo-commify average-so-far))
+          (say "%s %s." (wc-commify (- target count)) description)))
+      (say "Current average %s." (wc-commify average-so-far))
       (when (> goal count)
-        (say "Projected win: %s." (nanowrimo-win-date days-until-win)))
+        (say "Projected win: %s." (wc-win-date days-until-win)))
       (message message)))))
 
-(defun nanowrimo-win-date (days-until-win)
-  (let ((s (format-time-string "%d %B %Y" (nanowrimo-win-time days-until-win))))
+(defun wc-win-date (days-until-win)
+  (let ((s (format-time-string "%d %B %Y" (wc-win-time days-until-win))))
     (if (string= (substring s 0 1) "0") (substring s 1) s)))
 
-(defun nanowrimo-win-time (days-until-win)
+(defun wc-win-time (days-until-win)
   (time-add (current-time) (seconds-to-time (* 60 60 24 days-until-win))))
 
-(defun nanowrimo-show-targets ()
+(defun wc-show-targets ()
   (interactive)
-  (let* ((count (nanowrimo-full-count))
-         (targets (nanowrimo-targets count))
-         (start-of-day (nanowrimo-day-n-total (1- (nanowrimo-day))))
-         (buffer (get-buffer-create "*nanowrimo-targets*")))
+  (let* ((count (wc-full-count))
+         (targets (wc-targets count))
+         (start-of-day (wc-day-n-total (1- (wc-day))))
+         (buffer (get-buffer-create "*wc-targets*")))
     (with-current-buffer buffer
       (setf buffer-read-only nil)
       (erase-buffer)
       (dolist (target targets)
         (destructuring-bind (target . description) target
-          (if (and (> target count) (or (> count *nanowrimo-goal*) (>= *nanowrimo-goal* target)))
+          (if (and (> target count) (or (> count *wc-goal*) (>= *wc-goal* target)))
               (insert (format "%7s (%s; %s today) to %s\n"
-                              (nanowrimo-commify (- target count))
-                              (nanowrimo-commify target)
-                              (nanowrimo-commify (- target start-of-day))
+                              (wc-commify (- target count))
+                              (wc-commify target)
+                              (wc-commify (- target start-of-day))
                               description))))))
 
     (switch-to-buffer buffer)
@@ -313,7 +312,7 @@
     (goto-char (point-min))
     (local-set-key (kbd "q") 'bury-buffer)))
 
-(defun nanowrimo-commify (n)
+(defun wc-commify (n)
   (with-temp-buffer
     (insert (format "%s" (round n)))
     (while (> (- (point)
@@ -324,7 +323,7 @@
       (backward-char 1))
     (buffer-string)))
 
-(defun nanowrimo-insert-section-break ()
+(defun wc-insert-section-break ()
   (interactive)
   (newline)
   (insert "§")
@@ -334,29 +333,29 @@
     (previous-line 2)
     (center-paragraph)))
 
-(defvar nanowrimo-mode-syntax-table
+(defvar wc-mode-syntax-table
   (let ((st (make-syntax-table text-mode-syntax-table)))
     (modify-syntax-entry ?– "w" st)
     st)
   "Syntax table used while in `text-mode'.")
 
-(define-derived-mode nanowrimo-mode
-  outline-mode "NaNoWriMo" "Mode for working on NaNoWriMo novel."
-  :syntax-table nanowrimo-mode-syntax-table
+(define-derived-mode wc-mode
+  outline-mode "Word Count" "Mode for tracking word count progress."
+  :syntax-table wc-mode-syntax-table
   (smart-quote-mode t)
   (set (make-local-variable 'outline-regexp) "*+ ")
   (set (make-local-variable 'outline-level)
        (lambda ()
          (if (looking-at "*+") (- (match-end 0) (match-beginning 0)))))
   (set (make-local-variable '*smart-quote-use-mdash*) nil)
-  (add-hook 'after-save-hook 'nanowrimo-word-count nil t)
+  (add-hook 'after-save-hook 'wc-word-count nil t)
   (set-input-method 'ucs)
   (inactivate-input-method)
   (set-buffer-file-coding-system 'utf-8 t t))
 
-(define-key nanowrimo-mode-map (kbd "C-c w") 'nanowrimo-word-count)
-(define-key nanowrimo-mode-map (kbd "C-c t") 'nanowrimo-show-targets)
-(define-key nanowrimo-mode-map (kbd "C-c s") 'nanowrimo-insert-section-break)
+(define-key wc-mode-map (kbd "C-c w") 'wc-word-count)
+(define-key wc-mode-map (kbd "C-c t") 'wc-show-targets)
+(define-key wc-mode-map (kbd "C-c s") 'wc-insert-section-break)
 
 
-(provide 'nanowrimo)
+(provide 'wc)
