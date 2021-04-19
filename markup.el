@@ -36,6 +36,12 @@
 ;;; SUCH DAMAGE.
 ;;;
 
+(defvar *markup-latest-buffer* nil)
+
+(defun markup-set-latest-buffer ()
+  (interactive)
+  (setf *markup-latest-buffer* (current-buffer)))
+
 (defun markup-tag (prefix tag)
   (interactive "p\nsTag: ")
   (let (start end)
@@ -94,6 +100,136 @@
     (goto-char (point-min))
     (replace-regexp nullstring "\n\n")))
 
+(defun markup-add-link ()
+  (interactive)
+  (let ((link (markup-find-previous-link)))
+    (cond
+     (link
+      (goto-char (point-max))
+      (insert "[" link "] <")
+      (insert (read-string "URL: "))
+      (save-excursion (insert ">\n"))
+      (markup-tidy-links))
+     (t (message "No link found.")))))
+
+(defun markup-mark-link (prefix)
+  (interactive "p")
+  (let (start end)
+    (if (or (= prefix 4) mark-active)
+        (setq start (min (point) (mark))
+              end (max (point) (mark)))
+        (setq start (markup-find-previous-space)
+              end (point-marker)))
+    (goto-char end)
+    (insert "]")
+    (save-excursion
+      (goto-char start)
+      (insert (format "[")))))
+
+(defun markup-tidy-links ()
+  (interactive)
+  (let ((pat "^\\[[^]]+\\] +<[^>]+>"))
+    (save-excursion
+      (goto-char (point-min))
+      (when (search-forward-regexp pat nil t)
+        (beginning-of-line)
+        (let ((start (point)))
+          (save-excursion
+          (goto-char (point-max))
+          (search-backward-regexp pat start t)
+          (beginning-of-line)
+          (next-line)
+          (sort-lines nil start (point))
+          (align-regexp start (point) "\\(\\s-*\\)<")))))))
+
+(defun markup-find-previous-link ()
+  (interactive)
+  (let ((start nil)
+        (end nil))
+    (save-excursion
+      (search-backward "[")
+      (setf start (1+ (point)))
+      (save-excursion
+        (search-forward "]")
+        (setf end (1- (point))))
+      (if (search-forward "|" end t)
+          (setf start (point))))
+    (if (and start end)
+        (buffer-substring-no-properties start end)
+      nil)))
+
+(defun markup-paste-code ()
+  (interactive)
+  (save-excursion
+    (let ((start (point))
+          (end nil))
+      (yank)
+      (setf end (point))
+      (markup-indent-code start end))))
+
+(defun markup-indent-code (start end)
+  (interactive "r")
+  (let ((indent (markup-measure-indentation start end)))
+    (indent-code-rigidly start end (- 3 indent))))
+
+(defun markup-send-code (start end)
+  (interactive "r")
+  (cond
+   (*markup-latest-buffer*
+    (let ((text (buffer-substring-no-properties start end)))
+      (save-current-buffer
+        (set-buffer *markup-latest-buffer*)
+        (let ((start (point)))
+          (insert text)
+          (markup-indent-code start (point))))))
+   (t (message "No latest markup buffer."))))
+
+(defun markup-measure-indentation (start end)
+  (interactive "r")
+  (save-excursion
+    (let ((indent nil))
+      (goto-char start)
+      (while (< (point) end)
+        (let ((i (markup-measure-line-indentation)))
+          (when i (setf indent (min i (or indent i))))
+          (forward-line)))
+      indent)))
+
+(defun markup-measure-line-indentation ()
+  (save-excursion
+    (let (start end)
+      (end-of-line)
+      (setf end (point))
+      (beginning-of-line)
+      (setf start (point))
+      (when (and (search-forward-regexp "^\\(\\s-*\\)" end t) (< (point) end))
+        (- (match-end 1) (match-beginning 1))))))
+
+(defun markup-autogenerate-html ()
+  (interactive)
+  (add-hook 'after-save-hook #'markup-generate-html nil t))
+
+(defun markup-generate-html ()
+  "Generate HTML from the current file assuming we are connected
+to SLIME and the YAMP package has been loaded."
+  (interactive)
+  (cond
+   ((not (slime-connected-p))
+    (message "SLIME not connected to Lisp. Can't generate html."))
+   ((not (markup-yamp-exists))
+    (message "SLIME connected but YAMP not loaded. Can't generate html."))
+   (t
+    (let ((out (markup-send-slime-request)))
+      (if out
+          (message "Generated HTML: %s" out)
+        (message "Didn't generate HTML."))))))
+
+(defun markup-yamp-exists ()
+  (slime-eval '(cl:not (cl:not (cl:find-package "COM.GIGAMONKEYS.YAMP")))))
+
+(defun markup-send-slime-request ()
+  (slime-eval `(com.gigamonkeys.yamp::generate-html ,(buffer-file-name))))
+
 (define-derived-mode markup-mode
   outline-mode "Markup" "Mode for editing Markup based text."
   (auto-fill-mode t)
@@ -101,6 +237,10 @@
   (make-local-variable '*smart-quote-disabled-tests*)
   (push 'markup-in-verbatim *smart-quote-disabled-tests*)
   (push 'markup-in-code *smart-quote-disabled-tests*)
+  (make-local-variable 'indent-region-function)
+  (setq indent-region-function #'markup-indent-code)
+  (add-hook 'after-save-hook #'markup-generate-html nil t)
+  (add-hook 'after-save-hook #'markup-set-latest-buffer nil t)
   (set-buffer-file-coding-system 'utf-8 t t))
 
 (define-key markup-mode-map "\C-cf" nil)
@@ -110,5 +250,32 @@
 (define-key markup-mode-map "\C-cfc" (markup-formatter "code"))
 (define-key markup-mode-map "\C-cfm" (markup-formatter "math"))
 
+(defun markup-section-break ()
+  (interactive)
+  (insert "§")
+  (center-line))
+
+(defun markup-mark-cut-section (start end name)
+  (interactive "r\nMname: ")
+  (goto-char end)
+  (dotimes (i (1+ (comment-add nil)))
+    (insert comment-start))
+  (if (not (string-suffix-p " " comment-start)) (insert " "))
+  (insert "--8<")
+  (dotimes (i (- fill-column (+ (current-column) (length comment-end))))
+    (insert "-"))
+  (insert comment-end)
+  (insert "\n")
+  (goto-char start)
+  (dotimes (i (1+ (comment-add nil)))
+    (insert comment-start))
+  (if (not (string-suffix-p " " comment-start)) (insert " "))
+  (insert "--8<--- ")
+  (insert name)
+  (insert " ")
+  (dotimes (i (- fill-column (+ (current-column) (length comment-end))))
+    (insert "-"))
+  (insert comment-end)
+  (insert "\n"))
 
 (provide 'markup)
