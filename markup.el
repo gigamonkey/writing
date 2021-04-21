@@ -214,6 +214,7 @@
 to SLIME and the YAMP package has been loaded."
   (interactive)
   (cond
+   ((not (fboundp 'slime-connected-p)))
    ((not (slime-connected-p))
     (message "SLIME not connected to Lisp. Can't generate html."))
    ((not (markup-yamp-exists))
