@@ -98,7 +98,7 @@
   (- count (wc-day-n-total (1- (wc-day)))))
 
 (defun wc-targets (current-count)
-  (let ((targets (list (cons *wc-goal* "Win!"))))
+  (let ((targets (list (cons *wc-goal* "Done!"))))
     (cl-flet ((add-targets (new-targets)
                            (dolist (target new-targets)
                              (destructuring-bind (target-count . description) target
@@ -108,17 +108,15 @@
                                    (unless (= target-count *wc-goal*)
                                   (setf (cdr item) (format "%s, %s" (cdr item) description)))))
                                 (t (push target targets)))))))
-      (add-targets (wc-average-targets *wc-goal* *wc-max-days* (wc-day)))
-      (add-targets (wc-daily-targets *wc-goal* (wc-day)))
-      (add-targets (wc-round-targets (* 1000 (ceiling (+ current-count (* 5 1000)) 1000)) 1000))
-      (add-targets (wc-competitive-targets))
+      ;;(add-targets (wc-round-targets (* 1000 (ceiling (+ current-count (* 5 1000)) 1000)) 1000))
+      (add-targets (wc-round-targets *wc-goal* 1000))
+      (add-targets (wc-read-file-as-sexp *wc-targets-file*))
+      ;;(add-targets (wc-competitive-targets))
       (add-targets (wc-round-today-targets current-count 1000 10000))
-      (add-targets (wc-todays-pace-target (wc-day-n-total (1- (wc-day))) (wc-day)))
+      (add-targets (wc-ptg-targets *wc-goal* '(25 50 75)))
       (if (> (wc-day) 1)
           (add-targets (wc-maintain-average-target current-count)))
-      (add-targets (wc-increase-average-targets 50 2000))
-      ;;(add-targets (wc-round-numbers-to-go *wc-goal* (- *wc-goal* 500) current-count 500))
-      )
+      (add-targets (wc-increase-average-targets 50 2000)))
 
     (sort targets #'(lambda (x y) (< (car x) (car y))))))
 
@@ -161,9 +159,7 @@
     (let ((count (wc-full-count)))
       (if (zerop count)
           (message "No words yet. Better get cracking.")
-        (wc-report-word-count count *wc-goal* *wc-max-days*)
-        ;(message "%s words." (wc-commify count))
-        ))))
+        (wc-report-word-count count *wc-goal* *wc-max-days*)))))
 
 (defun wc-competitive-targets ()
   (let ((place 0))
@@ -173,26 +169,11 @@
 (defun wc-average-target (goal target-day today)
   (ceiling (* today (/ goal (float target-day)))))
 
-(defun wc-average-targets (goal start-target-day today)
-  (cond
-   ((<= start-target-day today) nil)
-   (t (cons (cons (wc-average-target goal start-target-day today) (format "get on pace to finish by 11/%d" start-target-day))
-            (wc-average-targets goal (1- start-target-day) today)))))
 
 (defun wc-round-targets (goal step)
   (cond
    ((not (plusp goal)) nil)
    (t (cons (cons goal (format "hit even %s" (wc-commify goal))) (wc-round-targets (- goal step) step)))))
-
-(defun wc-daily-targets (goal day)
-  (cond
-   ((= day *wc-max-days*) nil)
-   (t
-    (let ((per-day (/ goal (float *wc-max-days*))))
-      (cons
-       (cons (ceiling (/ (* goal day) (float *wc-max-days*)))
-             (format "hit 11/%s %s words-per-day goal" day (wc-commify per-day)))
-       (wc-daily-targets goal (1+ day)))))))
 
 (defun wc-maintain-average-target (count)
   (let* ((day (wc-day))
@@ -226,27 +207,8 @@
                                 (helper (1+ i))))))))
       (helper 0))))
 
-(defun wc-todays-pace-target (start-of-day today)
-  (let ((to-go (- *wc-goal* start-of-day)))
-    (cl-labels ((helper (i)
-             (cond
-              ((> i (- *wc-max-days* today)) nil)
-              (t
-               (let ((to-finish-in-pace (ceiling (/ to-go (float (1+ i))))))
-                 (cons
-                  (cons (+ start-of-day to-finish-in-pace)
-                        (format "hit new steady pace for 11/%d finish" (+ today i)))
-                  (helper (1+ i))))))))
-      (helper 1))))
-
-(defun wc-round-numbers-to-go (goal x current-count step)
-  (cond
-   ((<= x current-count) nil)
-   (t (cons
-       (cons x (format "even %s to go" (wc-commify (- goal x))))
-       (wc-round-numbers-to-go goal (- x step) current-count step)))))
-
-
+(defun wc-ptg-targets (goal percentages)
+  (mapcar #'(lambda (p) (cons (ceiling (* goal (/ p 100.0))) (format "%d%% done." p))) percentages))
 
 
 (defun wc-report-word-count (count goal days)
@@ -298,13 +260,14 @@
   (let* ((count (wc-full-count))
          (targets (wc-targets count))
          (start-of-day (wc-day-n-total (1- (wc-day))))
-         (buffer (get-buffer-create "*wc-targets*")))
+         (buffer (get-buffer-create "*wc-targets*"))
+         (goal *wc-goal*))
     (with-current-buffer buffer
       (setf buffer-read-only nil)
       (erase-buffer)
       (dolist (target targets)
         (destructuring-bind (target . description) target
-          (if (and (> target count) (or (> count *wc-goal*) (>= *wc-goal* target)))
+          (if (and (> target count) (or (> count goal) (>= goal target)))
               (insert (format "%7s (%s; %s today) to %s\n"
                               (wc-commify (- target count))
                               (wc-commify target)
