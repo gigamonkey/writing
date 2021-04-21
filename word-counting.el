@@ -44,20 +44,17 @@
      (defvar ,name nil ,docstring)
      (setq-default ,name ,value)))
 
-;; Number of words needed to win!
-(defparameter *wc-goal* 50000)
+(defparameter *wc-goal*)
 
-;; Total number of days available
-(defparameter *wc-max-days* 30)
+(defparameter *wc-daily-goal*)
 
-;; First day
-(defparameter *wc-start-date* (encode-time 0 0 0 1 11 (nth 5 (decode-time))))
+(defparameter *wc-start-date*)
 
 
 ;; File containing intermediate targets. Maintained by hand.
 (defparameter *wc-targets-file* "targets.sexp")
 
-(defparameter *wc-words-per-page* 250)
+(defparameter *wc-words-per-page* 350)
 
 (defun wc-day ()
   (1+ (- (time-to-days (current-time)) (time-to-days *wc-start-date*))))
@@ -170,7 +167,7 @@
     (let ((count (wc-full-count)))
       (if (zerop count)
           (message "No words yet. Better get cracking.")
-        (wc-report-word-count count *wc-goal* *wc-max-days*)))))
+        (wc-report-word-count count *wc-goal* *wc-daily-goal*)))))
 
 (defun wc-average-target (goal target-day today)
   (ceiling (* today (/ goal (float target-day)))))
@@ -216,40 +213,44 @@
   (mapcar #'(lambda (p) (cons (ceiling (* goal (/ p 100.0))) (format "%d%% done." p))) percentages))
 
 
-(defun wc-report-word-count (count goal days)
-  "Given count, goal, and the number of days in which we want to finish, compute a bunch of statistics and report them. If today's word count is over the average needed to finish in `days' will decrease the number of days and try again."
+(defun wc-report-word-count (count goal daily-goal)
+  "Given count, goal, and the number of days in which we want to finish, compute a bunch of statistics and report them."
   (let* ((day (wc-day))
          (words-to-go (- goal count))
          (full-days-passed (1- (wc-day)))
-         (days-left (- days day))
-         (words-per-day (ceiling words-to-go days-left))
          (words-today (- count (wc-day-n-total full-days-passed)))
          (previous-average (/ (wc-day-n-total full-days-passed) (float (1- day))))
          (average-so-far (/ count (float day)))
          (days-until-win (ceiling words-to-go average-so-far))
-         (spare-days (- days-left days-until-win))
-         (projected-word-count (round (* average-so-far *wc-max-days*)))
-         (words-by-midnight (ceiling (* (/ goal (float days)) day)))
          (next-target (find-if (lambda (x) (> (car x) count)) (wc-targets count)))
-         (words-left-today (- words-by-midnight count))
          (pages (ceiling count *wc-words-per-page*)))
     (wc-save-word-count count (wc-word-count-data-file))
     (wc-log-word-count count)
-    (let ((message ""))
+    (let ((message nil))
       (cl-flet ((say (x &rest args)
-                     (setf message (concat message " " (apply #'format x args)))))
-        (say "%s done today." (wc-commify words-today))
-        (say "%s total (~%s pages) done" (wc-commify count) (wc-commify pages))
-        (when (> goal count)
-          (say "%s to go." (wc-commify words-to-go)))
-        ;;(when (> words-left-today 0)
-        ;;  (say "%s left for today." (wc-commify words-left-today)))
-        ;;(say "%s words per day after today." (wc-commify words-per-day))
+                     (let ((new (apply #'format x args)))
+                       (setf message (if message (concat message " " new) new)))))
+        (say "%s done today; %s." (wc-commify words-today)
+             (cond
+              ((= daily-goal words-today)
+               "perfect")
+              ((> daily-goal words-today)
+               (format "%s to go" (wc-commify (- daily-goal words-today))))
+              (t
+               (format "%s extra" (wc-commify (- words-today daily-goal))))))
         (when next-target
           (destructuring-bind (target . description) next-target
             (say "%s %s." (wc-commify (- target count)) description)))
         (say "Current average %s." (wc-commify average-so-far))
         (say "Previous average %s." (wc-commify previous-average))
+        (say "%s (~%s pages) total; %s." (wc-commify count) (wc-commify pages)
+             (cond
+              ((zerop words-to-go)
+               "on the nose")
+              ((> words-to-go 0)
+               (format "%s words (~%s pages) to go" (wc-commify words-to-go) (wc-commify (ceiling words-to-go *wc-words-per-page*))))
+              (t
+               (format "%s words (~%s pages) over" (wc-commify words-to-go) (wc-commify (ceiling (abs words-to-go) *wc-words-per-page*))))))
         (when (> goal count)
           (say "Projected completion: %s." (wc-win-date days-until-win)))
         (message message)))))
@@ -301,7 +302,7 @@
   (interactive)
   (let ((config (wc-read-file-as-sexp (wc-config-file))))
     (set (make-local-variable '*wc-goal*) (cdr (assoc 'goal config)))
-    (set (make-local-variable '*wc-max-days*) (cdr (assoc 'days config)))
+    (set (make-local-variable '*wc-daily-goal*) (cdr (assoc 'daily-goal config)))
     (set (make-local-variable '*wc-start-date*) (wc-start-date))))
 
 (define-minor-mode wc-mode
