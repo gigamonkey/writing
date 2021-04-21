@@ -108,10 +108,8 @@
                                    (unless (= target-count *wc-goal*)
                                   (setf (cdr item) (format "%s, %s" (cdr item) description)))))
                                 (t (push target targets)))))))
-      ;;(add-targets (wc-round-targets (* 1000 (ceiling (+ current-count (* 5 1000)) 1000)) 1000))
       (add-targets (wc-round-targets *wc-goal* 1000))
       (add-targets (wc-read-file-as-sexp *wc-targets-file*))
-      ;;(add-targets (wc-competitive-targets))
       (add-targets (wc-round-today-targets current-count 1000 10000))
       (add-targets (wc-ptg-targets *wc-goal* '(25 50 75)))
       (if (> (wc-day) 1)
@@ -161,14 +159,8 @@
           (message "No words yet. Better get cracking.")
         (wc-report-word-count count *wc-goal* *wc-max-days*)))))
 
-(defun wc-competitive-targets ()
-  (let ((place 0))
-    (mapcar #'(lambda (x) (cons (car x) (format "%s (#%d)" (cdr x) (incf place))))
-            (wc-read-file-as-sexp *wc-targets-file*))))
-
 (defun wc-average-target (goal target-day today)
   (ceiling (* today (/ goal (float target-day)))))
-
 
 (defun wc-round-targets (goal step)
   (cond
@@ -289,14 +281,6 @@
       (insert ",")
       (backward-char 1))
     (buffer-string)))
-
-
-(defvar wc-mode-syntax-table
-  (let ((st (make-syntax-table text-mode-syntax-table)))
-    (modify-syntax-entry ?– "w" st)
-    st)
-  "Syntax table used while in `text-mode'.")
-
 
 (defun wc-set-targets (goal days start)
   (interactive "nGoal: \nnDays: \nsStart date: ")
