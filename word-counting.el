@@ -80,6 +80,9 @@
 (defun wc-word-count-full-log ()
   (format ".%s-word-counts-log.sexp" (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
 
+(defun wc-config-file ()
+  (format ".%s-config.sexp" (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
+
 (defun wc-save-word-count (words file)
   (let ((counts (wc-read-file-as-sexp file))
         (today (wc-day)))
@@ -93,6 +96,16 @@
     (goto-char (point-max))
     (insert (format "%d\t%d" (round (* (float-time) 1000)) words))
     (save-buffer)))
+
+(defun wc-start-date ()
+  "Start date is the date of the first logged word count or today."
+  (with-current-buffer (find-file-noselect (wc-word-count-full-log))
+    (goto-char (point-min))
+    (let ((ts (thing-at-point 'number t)))
+      (if ts
+          (apply 'encode-time (decode-time (/ ts 1000.0)))
+        (current-time)))))
+
 
 (defun wc-words-today (count)
   (- count (wc-day-n-total (1- (wc-day)))))
@@ -282,22 +295,19 @@
       (backward-char 1))
     (buffer-string)))
 
-(defun wc-set-targets (goal days start)
-  (interactive "nGoal: \nnDays: \nsStart date: ")
-  (set (make-local-variable '*wc-goal*) goal)
-  (set (make-local-variable '*wc-max-days*) days)
-  (set (make-local-variable '*wc-start-date*) (apply 'encode-time `(0 0 0 ,@(reverse (mapcar #'string-to-number (split-string start "-")))))))
 
+(defun wc-load-config ()
+  (interactive)
+  (let ((config (wc-read-file-as-sexp (wc-config-file))))
+    (set (make-local-variable '*wc-goal*) (cdr (assoc 'goal config)))
+    (set (make-local-variable '*wc-max-days*) (cdr (assoc 'days config)))
+    (set (make-local-variable '*wc-start-date*) (wc-start-date))))
 
 (define-minor-mode wc-mode
   "Mode for tracking word count progress."
   :lighter " wc"
+  (wc-load-config)
   (add-hook 'after-save-hook 'wc-word-count nil t)
 )
-
-
-;(define-key wc-mode-map (kbd "C-c w") 'wc-word-count)
-;(define-key wc-mode-map (kbd "C-c t") 'wc-show-targets)
-
 
 (provide 'word-counting)
