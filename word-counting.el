@@ -39,22 +39,18 @@
 ;;; To use this code add a modeline like "-*- mode: wc; -*-" to
 ;;; the top of a file.
 
-(defmacro defparameter (name value &optional docstring)
-  `(progn
-     (defvar ,name nil ,docstring)
-     (setq-default ,name ,value)))
+(defvar *wc-words-per-page* 350)
 
-(defparameter *wc-goal*)
-
-(defparameter *wc-daily-goal*)
-
-(defparameter *wc-start-date*)
+(defvar *wc-targets-file* "targets.sexp")
 
 
-;; File containing intermediate targets. Maintained by hand.
-(defparameter *wc-targets-file* "targets.sexp")
+;; These are set as buffer local variables in the mode function. The
+;; first two are loaded from a config file and the third from the word
+;; count log if it exists.
+(defvar *wc-total-goal*)
+(defvar *wc-daily-goal*)
+(defvar *wc-start-date*)
 
-(defparameter *wc-words-per-page* 350)
 
 (defun wc-day ()
   (1+ (- (time-to-days (current-time)) (time-to-days *wc-start-date*))))
@@ -71,14 +67,18 @@
     (print sexp (current-buffer))
     (save-buffer)))
 
+(defun wc-data-file (name)
+  (let ((basename (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
+    (format ".%s-%s" basename name)))
+
 (defun wc-word-count-data-file ()
-  (format ".%s-word-counts.sexp" (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
+  (wc-data-file "word-counts.sexp"))
 
 (defun wc-word-count-full-log ()
-  (format ".%s-word-counts-log.sexp" (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
+  (wc-data-file "word-counts.log"))
 
 (defun wc-config-file ()
-  (format ".%s-config.sexp" (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
+  (wc-data-file "config.sexp"))
 
 (defun wc-save-word-count (words file)
   (let ((counts (wc-read-file-as-sexp file))
@@ -91,8 +91,21 @@
 (defun wc-log-word-count (words)
   (with-current-buffer (find-file-noselect (wc-word-count-full-log))
     (goto-char (point-max))
-    (insert (format "%d\t%d" (round (* (float-time) 1000)) words))
-    (save-buffer)))
+    (backward-word 1)
+    (let ((last-logged (thing-at-point 'number)))
+      (when (/= last-logged words)
+        (goto-char (point-max))
+        (insert (format "%d\t%d\n" (round (* (float-time) 1000)) words))
+        (save-buffer)))))
+
+(defun wc-start-date ()
+  "Start date is the date of the first logged word count or today."
+  (with-current-buffer (find-file-noselect (wc-word-count-full-log))
+    (goto-char (point-min))
+    (let ((ts (thing-at-point 'number t)))
+      (if ts
+          (apply 'encode-time (decode-time (/ ts 1000.0)))
+        (current-time)))))
 
 (defun wc-start-date ()
   "Start date is the date of the first logged word count or today."
@@ -104,27 +117,30 @@
         (current-time)))))
 
 
+
+
 (defun wc-words-today (count)
   (- count (wc-day-n-total (1- (wc-day)))))
 
 (defun wc-targets (current-count)
-  (let ((targets (list (cons *wc-goal* "Done!"))))
+  "Generate various targets that we can aim at."
+  (let ((targets (list (cons *wc-total-goal* "Done!"))))
     (cl-flet ((add-targets (new-targets)
                            (dolist (target new-targets)
                              (destructuring-bind (target-count . description) target
                                (cond
                                 ((assoc target-count targets)
                                  (let ((item (assoc target-count targets)))
-                                   (unless (= target-count *wc-goal*)
+                                   (unless (= target-count *wc-total-goal*)
                                   (setf (cdr item) (format "%s, %s" (cdr item) description)))))
                                 (t (push target targets)))))))
-      (add-targets (wc-round-targets *wc-goal* 1000))
+      (add-targets (wc-round-targets *wc-total-goal* 1000))
       (add-targets (wc-read-file-as-sexp *wc-targets-file*))
       (add-targets (wc-round-today-targets current-count 1000 10000))
-      (add-targets (wc-ptg-targets *wc-goal* '(25 50 75)))
-      (if (> (wc-day) 1)
-          (add-targets (wc-maintain-average-target current-count)))
-      (add-targets (wc-increase-average-targets 50 2000)))
+      (add-targets (wc-ptg-targets *wc-total-goal* '(25 50 75)))
+      (when (> (wc-day) 1)
+        (add-targets (wc-maintain-average-target current-count))
+        (add-targets (wc-increase-average-targets 50 2000))))
 
     (sort targets #'(lambda (x y) (< (car x) (car y))))))
 
@@ -132,9 +148,6 @@
   (let* ((in-file (wc-read-file-as-sexp (wc-word-count-data-file)))
          (latest (assoc-if #'(lambda (x) (<= x n)) (reverse in-file))))
     (if latest (cdr latest) 0)))
-
-(defun wc-words-on-day (n)
-  (- (wc-day-n-total n) (wc-day-n-total (1- n))))
 
 (defun wc-full-count ()
   (save-excursion
@@ -167,10 +180,7 @@
     (let ((count (wc-full-count)))
       (if (zerop count)
           (message "No words yet. Better get cracking.")
-        (wc-report-word-count count *wc-goal* *wc-daily-goal*)))))
-
-(defun wc-average-target (goal target-day today)
-  (ceiling (* today (/ goal (float target-day)))))
+        (wc-report-word-count count *wc-total-goal* *wc-daily-goal*)))))
 
 (defun wc-round-targets (goal step)
   (cond
@@ -179,9 +189,8 @@
 
 (defun wc-maintain-average-target (count)
   (let* ((day (wc-day))
-         (yesterday-total (wc-day-n-total (1- day)))
-         (words-today (- count yesterday-total))
-         (average-as-of-yesterday (/ yesterday-total (1- day))))
+         (words-today (wc-words-today count))
+         (average-as-of-yesterday (/ (- count words-today) (1- day))))
     (if (< words-today average-as-of-yesterday)
         (list (cons (+ count (- average-as-of-yesterday words-today))
                     "maintain average"))
@@ -221,7 +230,7 @@
          (words-today (- count (wc-day-n-total full-days-passed)))
          (previous-average (/ (wc-day-n-total full-days-passed) (float (1- day))))
          (average-so-far (/ count (float day)))
-         (days-until-win (ceiling words-to-go average-so-far))
+         (days-until-completion (ceiling words-to-go average-so-far))
          (next-target (find-if (lambda (x) (> (car x) count)) (wc-targets count)))
          (pages (ceiling count *wc-words-per-page*)))
     (wc-save-word-count count (wc-word-count-data-file))
@@ -241,9 +250,10 @@
         (when next-target
           (destructuring-bind (target . description) next-target
             (say "%s %s." (wc-commify (- target count)) description)))
-        (say "Current average %s." (wc-commify average-so-far))
-        (say "Previous average %s." (wc-commify previous-average))
-        (say "%s (~%s pages) total; %s." (wc-commify count) (wc-commify pages)
+        (when (> (wc-day) 1)
+          (say "Current average %s." (wc-commify average-so-far))
+          (say "Previous average %s." (wc-commify previous-average)))
+        (say "Total: %s (~%s pages) done; %s." (wc-commify count) (wc-commify pages)
              (cond
               ((zerop words-to-go)
                "on the nose")
@@ -252,15 +262,15 @@
               (t
                (format "%s words (~%s pages) over" (wc-commify words-to-go) (wc-commify (ceiling (abs words-to-go) *wc-words-per-page*))))))
         (when (> goal count)
-          (say "Projected completion: %s." (wc-win-date days-until-win)))
+          (say "Projected completion: %s." (wc-completion-date days-until-completion)))
         (message message)))))
 
-(defun wc-win-date (days-until-win)
-  (let ((s (format-time-string "%d %B %Y" (wc-win-time days-until-win))))
-    (if (string= (substring s 0 1) "0") (substring s 1) s)))
+(defun wc-completion-date (days-until-completion)
+  (let ((s (format-time-string "%B %e, %Y" (wc-completion-time days-until-completion))))
+    (replace-regexp-in-string " +" " " s)))
 
-(defun wc-win-time (days-until-win)
-  (time-add (current-time) (seconds-to-time (* 60 60 24 days-until-win))))
+(defun wc-completion-time (days-until-completion)
+  (time-add (current-time) (seconds-to-time (* 60 60 24 days-until-completion))))
 
 (defun wc-show-targets ()
   (interactive)
@@ -268,7 +278,7 @@
          (targets (wc-targets count))
          (start-of-day (wc-day-n-total (1- (wc-day))))
          (buffer (get-buffer-create "*wc-targets*"))
-         (goal *wc-goal*))
+         (goal *wc-total-goal*))
     (with-current-buffer buffer
       (setf buffer-read-only nil)
       (erase-buffer)
@@ -301,7 +311,7 @@
 (defun wc-load-config ()
   (interactive)
   (let ((config (wc-read-file-as-sexp (wc-config-file))))
-    (set (make-local-variable '*wc-goal*) (cdr (assoc 'goal config)))
+    (set (make-local-variable '*wc-total-goal*) (cdr (assoc 'total-goal config)))
     (set (make-local-variable '*wc-daily-goal*) (cdr (assoc 'daily-goal config)))
     (set (make-local-variable '*wc-start-date*) (wc-start-date))))
 
@@ -309,7 +319,6 @@
   "Mode for tracking word count progress."
   :lighter " wc"
   (wc-load-config)
-  (add-hook 'after-save-hook 'wc-word-count nil t)
-)
+  (add-hook 'after-save-hook 'wc-word-count nil t))
 
 (provide 'word-counting)
