@@ -226,10 +226,10 @@ to SLIME and the YAMP package has been loaded."
         (message "Didn't generate HTML."))))))
 
 (defun markup-yamp-exists ()
-  (slime-eval '(cl:not (cl:not (cl:find-package "COM.GIGAMONKEYS.YAMP")))))
+  (slime-eval '(cl:not (cl:not (cl:find-package "MONKEYLIB-YAMP")))))
 
 (defun markup-send-slime-request ()
-  (slime-eval `(com.gigamonkeys.yamp::generate-html ,(buffer-file-name))))
+  (slime-eval `(monkeylib-yamp::generate-html ,(buffer-file-name))))
 
 (define-derived-mode markup-mode
   outline-mode "Markup" "Mode for editing Markup based text."
