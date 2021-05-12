@@ -14,6 +14,8 @@
 (defvar *last-backup-timestamp* nil)
 (defvar *high-water-mark* 0)
 
+(defvar *mplayer-program* "/usr/local/bin/mplayer")
+
 (defvar *months* '("" "January" "February" "March" "April" "May" "June" "July" "August" "September" "October" "November" "December"))
 
 (defvar *audio-file*)
@@ -35,15 +37,15 @@
     (setf *audio-file* audio-file)
     (find-file text-file)
     (transcription-mode)
-    (setf *mplayer-process* 
-	  (start-process
-	   "mplayer"
-	   "*mplayer*"
-	   "mplayer"
-	   "-quiet"
-	   "-slave"
-	   "-idle"
-	   (file-truename audio-file)))
+    (setf *mplayer-process*
+          (start-process
+           "mplayer"
+           "*mplayer*"
+           *mplayer-program*
+           "-quiet"
+           "-slave"
+           "-idle"
+           (file-truename audio-file)))
     (set-process-filter *mplayer-process* 'transcribe:grok-output)
     (when (zerop (buffer-size))
       (transcribe:insert-metadata))
@@ -53,19 +55,17 @@
   (cond
    ((string-match "\\([[:digit:]]\\{4\\}\\)\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\)-\\(.*\\)-[[:digit:]]*" filename)
     (let ((year (match-string 1 filename))
-	  (month (match-string 2 filename))
-	  (day (match-string 3 filename))
-	  (subject (capitalize (subst-char-in-string (string-to-char "-") (string-to-char " ") (match-string 4 filename)))))
-      (longlines-mode nil)
+          (month (match-string 2 filename))
+          (day (match-string 3 filename))
+          (subject (capitalize (subst-char-in-string (string-to-char "-") (string-to-char " ") (match-string 4 filename)))))
       (insert "-*- mode: transcription; coding: utf-8 -*-\n\n")
       (insert "Subject:     " subject "\n")
       (insert "Interviewer: Peter Seibel" "\n")
-      (insert "Date:        " day " " (nth (string-to-int month) *months*) " " year "\n")
+      (insert "Date:        " day " " (nth (string-to-number month) *months*) " " year "\n")
       (insert "Location:    " (read-string "Location: ") "\n")
       (insert "MP3 File:    " filename "\n")
       (insert "Total time:  " (transcribe:hh-mm-ss timestamp) "\n\n")
-      (insert "[00:00:00] ")
-      (longlines-mode t)))))
+      (insert "[00:00:00] ")))))
 
 (defun transcribe:insert-metadata ()
   (interactive)
@@ -102,7 +102,12 @@
 (defun transcribe:do-insert-speaker ()
   (let ((speaker (car *speaker-names*)))
     (insert (format "%s: " speaker))
-    (setf *speaker-names* (cons (cdr *speaker-names*) speaker))))
+    (transcribe:swap-speakers)))
+
+(defun transcribe:swap-speakers ()
+  (interactive)
+  (setf *speaker-names* (cons (cdr *speaker-names*) (car *speaker-names*)))
+  (message "Speakers: %s" *speaker-names*))
 
 (defun transcribe:set-speakers (first second)
   (interactive "sFirst speaker: \nsSecond speaker: ")
@@ -174,7 +179,7 @@
 (defun transcribe:move (amount)
   (transcribe:do "seek %d" amount)
   (push-timestamp-replacement-fn
-   (lambda (timestamp) 
+   (lambda (timestamp)
      (message (transcribe:timestamp-string timestamp))))
   (transcribe:request-timestamp))
 
@@ -204,11 +209,11 @@
   (cond
    ((string-match "ANS_TIME_POSITION=\\(.*\\)" output)
     (let* ((pos (match-string 1 output))
-	   (timestamp (round (string-to-number pos))))
+           (timestamp (round (string-to-number pos))))
       (funcall (pop-timestamp-replacement-fn) timestamp)))
    ((string-match "ANS_LENGTH=\\(.*\\)" output)
     (let* ((pos (match-string 1 output))
-	   (timestamp (round (string-to-number pos))))
+           (timestamp (round (string-to-number pos))))
       (transcribe:actually-insert-metadata *audio-file* timestamp)))))
 
 
@@ -223,9 +228,9 @@
 
 (defun transcribe:hh-mm-ss (total-seconds)
   (let* ((seconds (mod total-seconds 60))
-	 (total-minutes (floor total-seconds 60))
-	 (minutes (mod total-minutes 60))
-	 (hours (floor total-minutes 60)))
+         (total-minutes (floor total-seconds 60))
+         (minutes (mod total-minutes 60))
+         (hours (floor total-minutes 60)))
     (format "%02d:%02d:%02d" hours minutes seconds)))
 
 (defun transcribe:parse-hh-mm-ss (string)
@@ -240,7 +245,7 @@
 
 (defun transcribe:move-timestamp (amount)
   (let* ((old (transcribe:parse-hh-mm-ss (transcribe:find-preceeding-timestamp)))
-	 (new (+ old amount)))
+         (new (+ old amount)))
     (save-excursion
       (backward-paragraph 1)
       (re-search-forward "\\[\\([0-9]*:[0-9][0-9]:[0-9][0-9]\\)\\]")
@@ -261,10 +266,10 @@
    (lambda (timestamp)
      (let ((time (current-time)))
        (save-excursion
-	 (save-window-excursion
-		(find-file (expand-file-name "~/coders-at-work/time-data/transcription-log.sexp"))
-		(goto-char (point-max))
-		(insert (format "(:start %d :tape-time %d)\n" (+ (ash (first time) 16) (second time)) timestamp)))))))
+         (save-window-excursion
+                (find-file (expand-file-name "~/coders-at-work/time-data/transcription-log.sexp"))
+                (goto-char (point-max))
+                (insert (format "(:start %d :tape-time %d)\n" (+ (ash (first time) 16) (second time)) timestamp)))))))
   (transcribe:request-timestamp))
 
 (defun transcribe:end-transcribing ()
@@ -273,10 +278,10 @@
    (lambda (timestamp)
      (let ((time (current-time)))
        (save-excursion
-	 (save-window-excursion
-		(find-file (expand-file-name "~/coders-at-work/time-data/transcription-log.sexp"))
-		(goto-char (point-max))
-		(insert (format "(:end %d :tape-time %d)\n" (+ (ash (first time) 16) (second time)) timestamp)))))))
+         (save-window-excursion
+                (find-file (expand-file-name "~/coders-at-work/time-data/transcription-log.sexp"))
+                (goto-char (point-max))
+                (insert (format "(:end %d :tape-time %d)\n" (+ (ash (first time) 16) (second time)) timestamp)))))))
   (transcribe:request-timestamp))
 
 (defun transcribe:remove-paragraph ()
@@ -288,7 +293,7 @@
       (forward-paragraph 2)
       (search-forward "}")
       (kill-region start (point)))))
-    
+
 (defvar transcription-mode-syntax-table
   (let ((st (make-syntax-table text-mode-syntax-table)))
     (modify-syntax-entry ?_ "w" st)
@@ -297,7 +302,7 @@
 
 
 (define-derived-mode transcription-mode
-  coders-at-work-mode "Transcription" "Mode for transcribing audio."
+  markup-mode "Transcription" "Mode for transcribing audio."
   :syntax-table transcription-mode-syntax-table
   (set-buffer-file-coding-system 'utf-8 t t)
   (make-local-variable '*mplayer-process*)
@@ -328,4 +333,3 @@
 (define-key transcription-mode-map (kbd "C-<left>") 'transcribe:rewind)
 (define-key transcription-mode-map (kbd "C-c C-b") 'transcribe:backup-timestamp)
 (define-key transcription-mode-map (kbd "C-c C-f") 'transcribe:advance-timestamp)
-
