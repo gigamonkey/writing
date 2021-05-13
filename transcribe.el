@@ -302,7 +302,7 @@
 
 
 (define-derived-mode transcription-mode
-  markup-mode "Transcription" "Mode for transcribing audio."
+  text-mode "Transcription" "Mode for transcribing audio."
   :syntax-table transcription-mode-syntax-table
   (set-buffer-file-coding-system 'utf-8 t t)
   (make-local-variable '*mplayer-process*)
