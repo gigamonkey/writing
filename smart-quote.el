@@ -37,7 +37,7 @@
 ;;; SUCH DAMAGE.
 ;;;
 
-(require 'cl)
+(require 'cl-lib)
 
 ;; Do two ASCII dashes get translated to an emdash (with no spaces) or,
 ;; as some typographers prefer, an endash with surrounding spaces.
