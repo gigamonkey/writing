@@ -30,26 +30,43 @@
       (pop *timestamp-replacement-fn*)
     *default-timestamp-replacement-fn*))
 
+(defun transcribe:audio-file ()
+  (save-excursion
+    (goto-char (point-min))
+    (search-forward-regexp "^Audio:\s+\\(.*\\)$" nil t)
+    (match-string-no-properties 1)))
+
+(defun transcribe:check ()
+  ;; Assume we are already in a file with transcription mode on and the meta data in the file.
+  (interactive)
+  (transcribe:play-audio (transcribe:audio-file)))
+
+
 (defun transcribe (audio-file transcript-directory)
   "Launch mplayer to play the file in slave mode so we can control it."
   (interactive "fAudio file: \nDTranscript directory: ")
   (let ((text-file (concat (file-name-as-directory transcript-directory) (file-name-nondirectory (file-name-sans-extension audio-file)) ".txt")))
-    (setf *audio-file* audio-file)
     (find-file text-file)
     (transcription-mode)
-    (setf *mplayer-process*
-          (start-process
-           "mplayer"
-           "*mplayer*"
-           *mplayer-program*
-           "-quiet"
-           "-slave"
-           "-idle"
-           (file-truename audio-file)))
-    (set-process-filter *mplayer-process* 'transcribe:grok-output)
+    (transcribe:play-audio)
     (when (zerop (buffer-size))
-      (transcribe:insert-metadata))
-    (setf *paused* nil)))
+      (transcribe:insert-metadata))))
+
+(defun transcribe:play-audio (audio-file)
+  "Launch mplayer to play the audio file so we can control it."
+  (setf *audio-file* audio-file)
+  (setf *mplayer-process*
+        (start-process
+         "mplayer"
+         "*mplayer*"
+         *mplayer-program*
+         "-quiet"
+         "-slave"
+         "-idle"
+         (file-truename audio-file)))
+  (set-process-filter *mplayer-process* 'transcribe:grok-output)
+  (setf *paused* nil))
+
 
 (defun transcribe:actually-insert-metadata (filename timestamp)
   (cond
@@ -99,7 +116,23 @@
   (transcribe:do-insert-speaker)
   (fill-paragraph nil))
 
+(defun transcribe:find-previous-speaker ()
+  (interactive)
+  (save-excursion
+    (backward-paragraph 2)
+    (next-line)
+    (beginning-of-line)
+    (search-forward-regexp "\[[0-9:]+\] \\([^:]+\\):" nil t)
+    (match-string-no-properties 1)))
+
 (defun transcribe:do-insert-speaker ()
+  (let ((prev (transcribe:find-previous-speaker)))
+    (cond
+     ((string= prev (car *speaker-names*))
+      (message "Previous %s same as %s. Swapping." prev (car *speaker-names*))
+      (transcribe:swap-speakers))
+     (t
+      (message "Previous %s already different from as %s. Not swapping." prev (car *speaker-names*)))))
   (let ((speaker (car *speaker-names*)))
     (insert (format "%s: " speaker))
     (transcribe:swap-speakers)))
@@ -108,6 +141,23 @@
   (interactive)
   (setf *speaker-names* (cons (cdr *speaker-names*) (car *speaker-names*)))
   (message "Speakers: %s" *speaker-names*))
+
+(defun transcribe:find-speakers ()
+  (interactive)
+  (let (first second)
+    (save-excursion
+      (goto-char (point-min))
+      (when (search-forward-regexp "^Subject:\s+\\(.*\\)\s*$" nil t)
+        (setf first (match-string-no-properties 1))
+      (when (search-forward-regexp "Interviewer:\s+\\(.*\\)\s*$" nil t)
+        (setf second (match-string-no-properties 1)))))
+    (cond
+     ((and first second)
+      (transcribe:set-speakers first second)
+      (message "Speakers: %s" *speaker-names*))
+     (t
+      (message "No speakers found")))))
+
 
 (defun transcribe:set-speakers (first second)
   (interactive "sFirst speaker: \nsSecond speaker: ")
@@ -304,6 +354,8 @@
 (define-derived-mode transcription-mode
   text-mode "Transcription" "Mode for transcribing audio."
   :syntax-table transcription-mode-syntax-table
+  (auto-fill-mode t)
+  (smart-quote-mode t)
   (set-buffer-file-coding-system 'utf-8 t t)
   (make-local-variable '*mplayer-process*)
   (make-local-variable '*backup-seconds*)
@@ -312,7 +364,9 @@
   (make-local-variable '*timestamp-replacement-fn*)
   (make-local-variable '*adaptive-backup-seconds*)
   (make-local-variable '*high-water-mark*)
-  (make-local-variable '*last-backup-timestamp*))
+  (make-local-variable '*last-backup-timestamp*)
+  (make-local-variable '*speaker-names*)
+  (transcribe:find-speakers))
 
 (add-hook 'kill-buffer-hook 'transcribe:kill-buffer-function)
 
@@ -333,3 +387,5 @@
 (define-key transcription-mode-map (kbd "C-<left>") 'transcribe:rewind)
 (define-key transcription-mode-map (kbd "C-c C-b") 'transcribe:backup-timestamp)
 (define-key transcription-mode-map (kbd "C-c C-f") 'transcribe:advance-timestamp)
+
+(provide 'transcribe)
