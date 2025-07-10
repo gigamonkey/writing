@@ -93,7 +93,7 @@
     (goto-char (point-max))
     (backward-word 1)
     (let ((last-logged (thing-at-point 'number)))
-      (when (/= last-logged words)
+      (when (or (not last-logged) (/= last-logged words))
         (goto-char (point-max))
         (insert (format "%d\t%d\n" (round (* (float-time) 1000)) words))
         (save-buffer)))))
@@ -127,7 +127,7 @@
   (let ((targets (list (cons *wc-total-goal* "Done!"))))
     (cl-flet ((add-targets (new-targets)
                            (dolist (target new-targets)
-                             (destructuring-bind (target-count . description) target
+                             (cl-destructuring-bind (target-count . description) target
                                (cond
                                 ((assoc target-count targets)
                                  (let ((item (assoc target-count targets)))
@@ -248,7 +248,7 @@
               (t
                (format "%s extra" (wc-commify (- words-today daily-goal))))))
         (when next-target
-          (destructuring-bind (target . description) next-target
+          (cl-destructuring-bind (target . description) next-target
             (say "%s %s." (wc-commify (- target count)) description)))
         (when (> (wc-day) 1)
           (say "Current average %s." (wc-commify average-so-far))
@@ -283,7 +283,7 @@
       (setf buffer-read-only nil)
       (erase-buffer)
       (dolist (target targets)
-        (destructuring-bind (target . description) target
+        (cl-destructuring-bind (target . description) target
           (if (and (> target count) (or (> count goal) (>= goal target)))
               (insert (format "%7s (%s; %s today) to %s\n"
                               (wc-commify (- target count))
@@ -319,6 +319,6 @@
   "Mode for tracking word count progress."
   :lighter " wc"
   (wc-load-config)
-  (add-hook 'after-save-hook 'wc-word-count nil t))
+  (add-hook 'after-save-hook 'wc-word-count 90 t))
 
 (provide 'word-counting)
