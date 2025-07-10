@@ -6,6 +6,10 @@
 (require 'nxml-mode)
 (require 'smart-quote)
 
+;; Incomplete list
+(defvar *ptx-block-tags*
+  '(p program part chapter section subsection introduction conclusion sidebyside))
+
 (defun ptx-next-or-eof (what)
   (save-excursion
     (or (search-forward what (point-max) t) (point-max))))
@@ -31,14 +35,20 @@
               (let ((close (ptx-next-or-eof close-tag)))
                 (< open where close)))))))))
 
-;; Not quite working
 (defun ptx-auto-tag ()
-  (message "auto tag")
-  (when (and (eq (char-before) ?>)
-             (save-excursion (re-search-backward "<\\([[:alpha:]]+\\).*?>" nil t)))
-    (save-excursion
-      (edebug)
-      (insert (format "</%s>" (match-string 1))))))
+  (interactive)
+  (when (looking-back "<\\([[:alnum:]]+\\)>")
+    (let ((tag (match-string 1)))
+      (save-excursion (insert (format "</%s>" tag)))
+      (when (ptx-block-p tag)
+        (newline-and-indent)
+        (previous-line)
+        (end-of-line)
+        (newline-and-indent)))))
+
+(defun ptx-block-p (tag)
+  ;; incomplete list.
+  (member (intern (downcase tag)) *ptx-block-tags*))
 
 (defun ptx-add-tag (prefix tag)
   (interactive "p\nsTag: ")
@@ -46,7 +56,7 @@
     (if (or (= prefix 4) mark-active)
         (setq start (min (point) (mark))
               end (max (point) (mark)))
-        (setq start (ptx-find-start-of-word)
+        (setq start (ptx-find-start-of-code)
               end (point-marker)))
     (cond
      ((< (count-lines start end) 2)
@@ -121,6 +131,11 @@ for block elements like <p>."
     (re-search-backward "[^[:alnum:]]")
     (1+ (point))))
 
+(defun ptx-find-start-of-code ()
+  (if (looking-back "[[:alnum:]]")
+      (ptx-find-start-of-word)
+    (ptx-find-previous-space)))
+
 (defmacro ptx-formatter (tag)
   `#'(lambda (prefix)
       (interactive "p")
@@ -146,7 +161,7 @@ for block elements like <p>."
         isearch-regexp-lax-whitespace t
         search-whitespace-regexp "[ \t\r\n]+")
 
-  ;;(add-hook 'post-self-insert-hook 'ptx-auto-tag nil t)
+  (add-hook 'post-self-insert-hook 'ptx-auto-tag nil t)
 
   (set-buffer-file-coding-system 'utf-8 t t))
 
