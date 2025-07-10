@@ -191,15 +191,11 @@
   :global nil
   :keymap
   (list
-   '("'" . smart-quote-insert-single-quote)
-   '("\"" . smart-quote-insert-double-quote)
-   '("-" . smart-quote-insert-dash)
-   '("." . smart-quote-insert-ellipsis)
-   '(">" . smart-quote-insert-arrow)
    (cons (kbd "C-'") 'smart-quote-rotate-quote)
    (cons (kbd "C-\"") 'smart-quote-rotate-quote)
-   (cons (kbd "C-M-'") 'smart-quote-accent)
-   ))
+   (cons (kbd "C-M-'") 'smart-quote-accent))
+
+  (add-hook 'post-self-insert-hook 'smart-quote-convert-one nil t))
 
 (defun maybe-smart-quote-mode (x)
   "To be bound to C-c q so we can use C-u C-c q to convert one thing without switching modes."
