@@ -90,6 +90,16 @@
         (setf end (if (ignore-errors (progn (forward-sexp 1) t)) (point) (1+ where)))))
     (and start (<= start where) (< where end))))
 
+(defun markup-in-backticks ()
+  (let ((count 0)
+        (current-pos (point)))
+    (save-excursion
+      (goto-char (point-min))
+      (while (and (< (point) current-pos)
+                  (search-forward (char-to-string ?`) current-pos t))
+        (setq count (1+ count))))
+    (not (zerop (mod count 2)))))
+
 (defun markup-fix-longlines ()
   (interactive)
   (let ((nullstring (string ?\000)))
@@ -238,18 +248,28 @@ to SLIME and the YAMP package has been loaded."
   (make-local-variable '*smart-quote-disabled-tests*)
   (push 'markup-in-verbatim *smart-quote-disabled-tests*)
   (push 'markup-in-code *smart-quote-disabled-tests*)
+  (push 'markup-in-backticks *smart-quote-disabled-tests*)
   (make-local-variable 'indent-region-function)
   (setq indent-region-function #'markup-indent-code)
-  (add-hook 'after-save-hook #'markup-generate-html nil t)
-  (add-hook 'after-save-hook #'markup-set-latest-buffer nil t)
+  (add-hook 'after-save-hook #'markup-generate-html -90 t)
+  (add-hook 'after-save-hook #'markup-set-latest-buffer -90 t)
+
+  ;; Make incremental search treat newlines as whitespace
+  (setq isearch-lax-whitespace t
+        isearch-regexp-lax-whitespace t
+        search-whitespace-regexp "[ \t\r\n]+")
+
   (set-buffer-file-coding-system 'utf-8 t t))
 
 (define-key markup-mode-map "\C-cf" nil)
-(define-key markup-mode-map "\C-cfi" (markup-formatter "i"))
 (define-key markup-mode-map "\C-cfb" (markup-formatter "b"))
-(define-key markup-mode-map "\C-cfn" (markup-formatter "note"))
 (define-key markup-mode-map "\C-cfc" (markup-formatter "code"))
+(define-key markup-mode-map "\C-cff" (markup-formatter "fragment"))
+(define-key markup-mode-map "\C-cfg" (markup-formatter "gap"))
+(define-key markup-mode-map "\C-cfi" (markup-formatter "i"))
 (define-key markup-mode-map "\C-cfm" (markup-formatter "math"))
+(define-key markup-mode-map "\C-cfv" (markup-formatter "vocab"))
+(define-key markup-mode-map "\C-cfn" (markup-formatter "note"))
 
 (defun markup-section-break ()
   (interactive)
