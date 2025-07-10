@@ -82,7 +82,9 @@
     ("-" "Hyphen" "-")
     ("—" "Emdash" "--")
     ("−" "Minus sign" "-")
-    ("…" "Ellipses" "...")))
+    ("…" "Ellipses" "...")
+    ("⟹" "Long rightwards double arrow" "==>")
+    ))
 
 (defvar smart-quote-rotations
   '(("“" . "”")
@@ -141,6 +143,18 @@
      (t
       (insert-and-inherit ".")))))
 
+(defun smart-quote-insert-arrow ()
+  (interactive)
+  (let ((char1 (char-before (1- (point))))
+        (char2 (char-before)))
+    (cond
+     ((and char1 char2 (char-equal char1 ?=) (char-equal char2 ?=))
+      (delete-backward-char 2)
+      (smart-quote-insert "⟹"))
+     (t
+      (insert-and-inherit ">")))))
+
+
 (defun smart-quote-accent ()
   (interactive)
   (let ((char (char-before)))
@@ -153,9 +167,26 @@
      ((char-equal char ?\:) (insert ?\u0308))
      (t (message "Don't know how to convert %s to accent." char)))))
 
+(defun smart-quote-convert-one ()
+  (interactive)
+  (let ((char (char-before (point))))
+    (delete-backward-char 1)
+    (cond
+     ((char-equal char ?')
+      (smart-quote-insert-single-quote))
+     ((char-equal char ?\")
+      (smart-quote-insert-double-quote))
+     ((char-equal char ?-)
+      (smart-quote-insert-dash))
+     ((char-equal char ?.)
+      (smart-quote-insert-ellipsis))
+     ((char-equal char ?>)
+      (smart-quote-insert-arrow))
+     (t (insert-and-inherit char)))))
+
 (define-minor-mode smart-quote-mode
   "Insert the Unicode characters for curly quotes automatically."
-  nil
+  :init-value nil
   :lighter " sq"
   :global nil
   :keymap
@@ -164,9 +195,17 @@
    '("\"" . smart-quote-insert-double-quote)
    '("-" . smart-quote-insert-dash)
    '("." . smart-quote-insert-ellipsis)
+   '(">" . smart-quote-insert-arrow)
    (cons (kbd "C-'") 'smart-quote-rotate-quote)
    (cons (kbd "C-\"") 'smart-quote-rotate-quote)
    (cons (kbd "C-M-'") 'smart-quote-accent)
    ))
+
+(defun maybe-smart-quote-mode (x)
+  "To be bound to C-c q so we can use C-u C-c q to convert one thing without switching modes."
+  (interactive "p")
+  (if (= x 1)
+      (smart-quote-mode 'toggle)
+    (smart-quote-convert-one)))
 
 (provide 'smart-quote)
