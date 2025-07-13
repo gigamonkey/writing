@@ -5,16 +5,37 @@
 
 (defun index-electric-newline ()
   (interactive)
+  (beginning-of-line)
   (let ((entry (index-get-line)))
-    (beginning-of-line)
-    (save-excursion
-      (let ((kill-whole-line nil))
-        (kill-line))
-      (let ((pos (index-find-position (downcase entry))))
-        (goto-char pos)
-        (when (not (string= (downcase entry) (downcase (index-get-line))))
-          (insert entry)
-          (newline))))))
+    (let ((kill-whole-line nil))
+      (kill-line))
+    (index-insert-entry entry)))
+
+(defun index-insert-entry (entry)
+  (save-excursion
+    (let ((pos (index-find-position (downcase entry))))
+      (goto-char pos)
+      (when (not (string= (downcase entry) (downcase (index-get-line))))
+        (insert entry)
+        (newline))))
+  (if nil
+      (let ((after-comma (index-extract-after-comma entry)))
+        (when after-comma
+          (message "Adding %s" after-comma)
+          (index-insert-entry after-comma)))))
+
+
+(defun index-extract-after-comma (s)
+  "Extract the text after the first comma in s."
+  (let ((parts (split-string s ",")))
+    (if (> (length parts) 1)
+        (string-trim (nth 1 parts))
+      nil)))
+
+(defun index-tidy ()
+  (interactive)
+  (index-sort)
+  (index-dedupe))
 
 (defun index-dedupe ()
   (interactive)
@@ -26,6 +47,13 @@
         (while (and (not (string= (index-get-line) "")) (string= current (index-get-line)))
           (let ((kill-whole-line t))
             (kill-line)))))))
+
+(defun index-sort ()
+  (interactive)
+  (save-excursion
+    (index-goto-start)
+    (let ((sort-fold-case t))
+      (sort-lines nil (point) (point-max)))))
 
 (defun index-goto-start ()
   (goto-char (point-min))
