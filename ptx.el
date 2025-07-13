@@ -8,7 +8,7 @@
 
 ;; Incomplete list
 (defvar *ptx-block-tags*
-  '(p program part chapter section subsection introduction conclusion sidebyside))
+  '(p program part chapter section subsection introduction conclusion sidebyside ul ol))
 
 (defun ptx-next-or-eof (what)
   (save-excursion
@@ -37,7 +37,7 @@
 
 (defun ptx-auto-tag ()
   (interactive)
-  (when (looking-back "<\\([[:alnum:]]+\\)>")
+  (when (and (looking-at "[ \t\n]") (looking-back "<\\([[:alnum:]-]+\\)>"))
     (let ((tag (match-string 1)))
       (save-excursion (insert (format "</%s>" tag)))
       (when (ptx-block-p tag)
@@ -174,4 +174,4 @@ for block elements like <p>."
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.ptx\\'" . ptx-mode))
 
-(provide 'ptx-mode)
+(provide 'ptx)
