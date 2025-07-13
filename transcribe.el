@@ -65,7 +65,8 @@
          "-idle"
          (file-truename audio-file)))
   (set-process-filter *mplayer-process* 'transcribe:grok-output)
-  (setf *paused* nil))
+  (setf *paused* nil)
+  (transcribe:frob-modeline))
 
 
 (defun transcribe:actually-insert-metadata (filename timestamp)
@@ -125,6 +126,14 @@
     (search-forward-regexp "\[[0-9:]+\] \\([^:]+\\):" nil t)
     (match-string-no-properties 1)))
 
+(defun transcribe:join-next-if-same (speaker)
+  (save-excursion
+    (beginning-of-line)
+    (end-of-paragraph-text)
+    (when (looking-at (concat "[[:space:]]*\[[0-9:]+\] " speaker ":"))
+      (replace-match "")
+      (fill-paragraph nil))))
+
 (defun transcribe:do-insert-speaker ()
   (let ((prev (transcribe:find-previous-speaker)))
     (cond
@@ -135,7 +144,8 @@
       (message "Previous %s already different from as %s. Not swapping." prev (car *speaker-names*)))))
   (let ((speaker (car *speaker-names*)))
     (insert (format "%s: " speaker))
-    (transcribe:swap-speakers)))
+    (transcribe:swap-speakers)
+    speaker))
 
 (defun transcribe:swap-speakers ()
   (interactive)
@@ -176,7 +186,7 @@
   (message "Got timestamp %s when *last-backup-timestamp* is %s" (transcribe:hh-mm-ss timestamp) (transcribe:hh-mm-ss (or *last-backup-timestamp* 0)))
   (cond
    ((and *last-backup-timestamp* (<= timestamp *last-backup-timestamp*))
-    (incf *adaptive-backup-seconds*))
+    (cl-incf *adaptive-backup-seconds*))
    (t
     (setf *last-backup-timestamp* timestamp)
     (setf *adaptive-backup-seconds* *initial-adaptive-backup-seconds*)))
@@ -199,7 +209,19 @@
   (interactive)
   (when (not *paused*) (transcribe:move (- *auto-rewind*)))
   (transcribe:do "pause")
-  (setf *paused* (not *paused*)))
+  (setf *paused* (not *paused*))
+  (transcribe:frob-modeline))
+
+(defun transcribe:frob-modeline ()
+  (let ((end (last mode-line-format))
+        (marker (if *paused* "PAUSED" "PLAYING")))
+    (setq mode-line-format
+          (append
+           (if (member (car end) '("PLAYING" "PAUSED"))
+               (ldiff mode-line-format end)
+             mode-line-format)
+           (list marker)))))
+
 
 (defun transcribe:jump ()
   (interactive)
@@ -271,7 +293,9 @@
   (setf *high-water-mark* timestamp)
   (insert (transcribe:timestamp-string timestamp))
   (insert " ")
-  (when *speaker-names* (transcribe:do-insert-speaker)))
+  (when *speaker-names*
+    (let ((speaker (transcribe:do-insert-speaker)))
+      (transcribe:join-next-if-same speaker))))
 
 (defun transcribe:timestamp-string (timestamp)
   (format "[%s]" (transcribe:hh-mm-ss timestamp)))
@@ -284,7 +308,7 @@
     (format "%02d:%02d:%02d" hours minutes seconds)))
 
 (defun transcribe:parse-hh-mm-ss (string)
-  (destructuring-bind (hh mm ss) (mapcar 'string-to-number (split-string string ":"))
+  (cl-destructuring-bind (hh mm ss) (mapcar 'string-to-number (split-string string ":"))
     (+ ss (* mm 60) (* hh 60 60))))
 
 (defun transcribe:find-preceeding-timestamp ()
@@ -350,6 +374,8 @@
     st)
   "Syntax table used while in `text-mode'.")
 
+(defvar *transcribe:completions* (list "MySQL" "Sendgrid" "Marc"))
+
 
 (define-derived-mode transcription-mode
   text-mode "Transcription" "Mode for transcribing audio."
@@ -365,8 +391,18 @@
   (make-local-variable '*adaptive-backup-seconds*)
   (make-local-variable '*high-water-mark*)
   (make-local-variable '*last-backup-timestamp*)
+  (make-local-variable '*transcribe:completions*)
   (make-local-variable '*speaker-names*)
   (transcribe:find-speakers))
+
+(defun transcribe:replace (start end)
+  (interactive "r")
+  (let ((replacement (completing-read "> " *transcribe:completions* nil nil nil '*transcribe:completions*)))
+    (delete-region start end)
+    (insert replacement)))
+
+
+
 
 (add-hook 'kill-buffer-hook 'transcribe:kill-buffer-function)
 
@@ -386,6 +422,8 @@
 (define-key transcription-mode-map (kbd "C-<right>") 'transcribe:fast-forward)
 (define-key transcription-mode-map (kbd "C-<left>") 'transcribe:rewind)
 (define-key transcription-mode-map (kbd "C-c C-b") 'transcribe:backup-timestamp)
+(define-key transcription-mode-map (kbd "C-c C-c") 'transcribe:check)
 (define-key transcription-mode-map (kbd "C-c C-f") 'transcribe:advance-timestamp)
+(define-key transcription-mode-map (kbd "C-c C-r") 'transcribe:replace)
 
 (provide 'transcribe)
