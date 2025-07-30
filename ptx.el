@@ -8,7 +8,7 @@
 
 ;; Incomplete list
 (defvar *ptx-block-tags*
-  '(p program part chapter section subsection introduction conclusion sidebyside ul ol))
+  '(p note program part chapter section subsection introduction conclusion sidebyside ul ol))
 
 (defun ptx-next-or-eof (what)
   (save-excursion
@@ -37,7 +37,7 @@
 
 (defun ptx-auto-tag ()
   (interactive)
-  (when (and (looking-at "[ \t\n]") (looking-back "<\\([[:alnum:]-]+\\)>"))
+  (when (and (looking-at "[ \t\n]") (looking-back "<\\([[:alnum:]-]+\\)[^<]*>"))
     (let ((tag (match-string 1)))
       (save-excursion (insert (format "</%s>" tag)))
       (when (ptx-block-p tag)
@@ -59,12 +59,19 @@
         (setq start (ptx-find-start-of-code)
               end (point-marker)))
     (cond
+     ;; If adding an empty tag, position cursor between tags.
+     ((= start end)
+      (insert (format "<%s>" tag))
+      (save-excursion
+        (insert (format "</%s> " tag))))
+     ;; If on one line, assume an inline tag
      ((< (count-lines start end) 2)
       (goto-char end)
       (insert (format "</%s>" tag))
       (save-excursion
         (goto-char start)
         (insert (format "<%s>" tag))))
+     ;; Otherwise assume a block tag
      (t
       (goto-char end)
       (insert (format "</%s>\n" tag))
@@ -100,11 +107,18 @@ for block elements like <p>."
   (interactive)
   (just-one-space -1)
   (nxml-split-element)
-  (fill-paragraph)
+  (when (not (looking-at "[[:space:]\n]*</"))
+    (fill-paragraph))
   (save-excursion
     (previous-line 2)
     (end-of-line)
-    (insert "\n")))
+    (insert "\n"))
+  (when (looking-at "[[:space:]\n]*</")
+    (indent-for-tab-command)
+    (previous-line 1)
+    (end-of-line)
+    (insert "\n")
+    (indent-for-tab-command)))
 
 (defun ptx-join-block-element ()
   (interactive)
@@ -141,6 +155,17 @@ for block elements like <p>."
       (interactive "p")
       (ptx-add-tag prefix ,tag)))
 
+(defun ptx-code-visualization-url ()
+  (interactive)
+  (let ((default-directory (locate-dominating-file (buffer-file-name) "make-visualizer-link.py")))
+    (insert
+     (with-temp-buffer
+       (let ((coding-system-for-read 'utf-8)
+             (coding-system-for-write 'utf-8))
+         (insert (current-kill 0))
+         (call-process-region (point-min) (point-max) "uv" t t nil "run" "make-visualizer-link.py")
+         (buffer-string))))))
+
 (define-derived-mode ptx-mode
   nxml-mode "PreTeXt"
   "Major mode for editing PreTeXt files, based on `nxml-mode`."
@@ -161,15 +186,25 @@ for block elements like <p>."
         isearch-regexp-lax-whitespace t
         search-whitespace-regexp "[ \t\r\n]+")
 
+  ;; Make ispell skip XML markup to focus on the text.
+  (setq-local ispell-skip-region-alist
+              (append ispell-skip-region-alist
+                      '(
+                        ("<[^>]+" . ">")     ; Skip XML tags
+                        ("<!--" . "-->")      ; Skip XML comments
+                        ("<\\?xml" . "\\?>")  ; Skip XML declarations
+                        )))
+
   (add-hook 'post-self-insert-hook 'ptx-auto-tag nil t)
 
   (set-buffer-file-coding-system 'utf-8 t t))
 
-(define-key ptx-mode-map (kbd "C-c C-t") 'ptx-add-tag)
 (define-key ptx-mode-map (kbd "C-c C-c") (ptx-formatter "c"))
-(define-key ptx-mode-map (kbd "C-c C-x") 'ptx-insert-xref)
 (define-key ptx-mode-map (kbd "C-c C-e") 'ptx-expand-entity)
 (define-key ptx-mode-map (kbd "C-c C-p") 'ptx-split-block-element)
+(define-key ptx-mode-map (kbd "C-c C-t") 'ptx-add-tag)
+(define-key ptx-mode-map (kbd "C-c C-v") 'ptx-code-visualization-url)
+(define-key ptx-mode-map (kbd "C-c C-x") 'ptx-insert-xref)
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.ptx\\'" . ptx-mode))
